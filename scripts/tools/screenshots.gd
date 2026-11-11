@@ -31,6 +31,9 @@ func _run() -> void:
 	await _wait(10)
 	await _snap("01_title.png")
 	gs.new_run(1, 777)
+	change_scene_to_file("res://scenes/ui/HowToPlay.tscn")
+	await _wait(10)
+	await _snap("01b_how_to_play.png")
 	gs.complete_node(gs.available_nodes()[0])
 	gs.overworld_banner = "Earth Realm - Corporate Suburbs & HOA Dungeons"
 	change_scene_to_file("res://scenes/overworld/OverworldMap.tscn")

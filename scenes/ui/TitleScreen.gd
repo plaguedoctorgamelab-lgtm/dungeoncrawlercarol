@@ -84,7 +84,7 @@ func start_new_game() -> void:
 	GameState.new_run(selected_difficulty)
 	GameState.active_slot = 1
 	GameState.overworld_banner = "%s - %s" % [Roster.REALM_NAMES[0], Roster.REALM_SUBTITLES[0]]
-	get_tree().change_scene_to_file("res://scenes/overworld/OverworldMap.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/HowToPlay.tscn")
 
 
 func _open_load_menu() -> void:

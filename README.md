@@ -6,6 +6,8 @@ Princess Penny, from the Sea Lord's underwater boardroom.
 
 ![Title](docs/screenshots/01_title.png)
 
+![How to Play](docs/screenshots/01b_how_to_play.png)
+
 | Overworld | Tactical battle | Final boss |
 |---|---|---|
 | ![Overworld](docs/screenshots/02_overworld.png) | ![Battle](docs/screenshots/03_battle_realm1.png) | ![Sea Lord](docs/screenshots/03_battle_realm4.png) |
@@ -30,6 +32,7 @@ Hover an enemy to see your hit chance, its HP and its flavor text.
 ## What's in the game
 
 * **Title screen** with 4 difficulties (Easy, Medium, Hard, EXTREME!!!!!!) and 3 save slots.
+* **How to Play screen** shown after NEW GAME, before the map: the mission, map nodes, battle controls, weapons and survival tips.
 * **Overworld:** a procedural branching node map per realm (15-20 nodes). Node types are
   Combat, Hazard (random HP loss, item, or shortcut), Supply Cache (a guaranteed weapon or drink) and Boss.
   The boss always spawns in the final 25% of nodes, and every path leads to it.
@@ -75,7 +78,7 @@ godot --headless --export-release "Windows Desktop" builds/DungeonCrawlerCarol_V
 
 The test runner boots into the title screen, starts a new game, generates 100 overworld maps, plays
 a mock tactical turn (move, attack, drink, enemy phase, victory), fights all 4 bosses including the Penny
-rescue, and checks save/load and the permadeath wipe. There are 98 checks, and the process exits with the
+rescue, and checks save/load and the permadeath wipe. There are 100 checks, and the process exits with the
 number of failures.
 
 To change monster stats, edit `scripts/data/Roster.gd` and run

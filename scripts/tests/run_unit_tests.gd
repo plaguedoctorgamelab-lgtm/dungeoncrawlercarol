@@ -103,7 +103,12 @@ func _test_title() -> void:
 	title.start_new_game()
 	await process_frame
 	await process_frame
-	check(current_scene.name == "OverworldMap", "New Game opens the overworld")
+	check(current_scene.name == "HowToPlay", "New Game shows the How to Play screen")
+	check(current_scene.find_child("Sections", true, false).get_child_count() == 5, "instructions have 5 sections")
+	current_scene.continue_to_map()
+	await process_frame
+	await process_frame
+	check(current_scene.name == "OverworldMap", "How to Play continues to the overworld")
 	check(gs.map_data["nodes"].size() >= 15, "overworld generated with %d nodes" % gs.map_data["nodes"].size())
 
 
