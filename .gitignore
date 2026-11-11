@@ -4,3 +4,4 @@
 builds/
 *.tmp
 export_credentials.cfg
+docs/email_summary*.txt
