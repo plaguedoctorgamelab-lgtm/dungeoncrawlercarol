@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_o2jaa"]
+[ext_resource type="Texture2D" path="res://assets/sprites/hustle_grindset_gargoyle.png" id="2_552dh"]
+
+[resource]
+script = ExtResource("1_o2jaa")
+enemy_id = "hustle_grindset_gargoyle"
+display_name = "5 AM Grindset Gargoyle"
+max_hp = 60.0
+base_damage = 18.0
+sight_radius_tiles = 5
+sprite_texture = ExtResource("2_552dh")
+role = "Heavy Tank"
+realm = 1
+damage_reduction = 0.15
+flavor_text = "Sleep is for people without a podcast."

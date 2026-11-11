@@ -1,0 +1,59 @@
+extends SceneTree
+## Renders the main screens to PNGs (needs a real window, not --headless).
+## godot --path . --script res://scripts/tools/screenshots.gd -- <out_dir>
+
+var out_dir: String
+
+
+func _initialize() -> void:
+	var args := OS.get_cmdline_user_args()
+	out_dir = args[0] if not args.is_empty() else ProjectSettings.globalize_path("res://docs/screenshots")
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	_run.call_deferred()
+
+
+func _snap(file: String) -> void:
+	await RenderingServer.frame_post_draw
+	var img := root.get_texture().get_image()
+	img.save_png(out_dir.path_join(file))
+	print("saved ", file)
+
+
+func _wait(n: int) -> void:
+	for i in n:
+		await process_frame
+
+
+func _run() -> void:
+	var gs := root.get_node("GameState")
+	root.size = Vector2i(1280, 720)
+	change_scene_to_file("res://scenes/ui/TitleScreen.tscn")
+	await _wait(10)
+	await _snap("01_title.png")
+	gs.new_run(1, 777)
+	gs.complete_node(gs.available_nodes()[0])
+	gs.overworld_banner = "Earth Realm - Corporate Suburbs & HOA Dungeons"
+	change_scene_to_file("res://scenes/overworld/OverworldMap.tscn")
+	await _wait(10)
+	await _snap("02_overworld.png")
+	for realm in [0, 3]:
+		gs.start_realm(realm)
+		gs.pending_node = gs.map_data["boss_id"] if realm == 3 else gs.available_nodes()[0]
+		change_scene_to_file("res://scenes/tactical/TacticalBattle.tscn")
+		await _wait(10)
+		var battle := current_scene
+		while not battle.ready_done:
+			await process_frame
+		# Reveal the whole map for the screenshot.
+		battle.grid.update_fog(battle.carol.cell, 30)
+		for e in battle.enemies:
+			e.visible = true
+		var e0 = battle.enemies[0]
+		battle.hovered_cell = e0.cell
+		battle._update_hover()
+		await _wait(5)
+		await _snap("03_battle_realm%d.png" % (realm + 1))
+	change_scene_to_file("res://scenes/ui/VictoryScreen.tscn")
+	await _wait(90)
+	await _snap("04_victory.png")
+	quit(0)

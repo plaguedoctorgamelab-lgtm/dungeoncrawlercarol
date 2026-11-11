@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_y3q15"]
+[ext_resource type="Texture2D" path="res://assets/sprites/oil_spill_blob.png" id="2_btppr"]
+
+[resource]
+script = ExtResource("1_y3q15")
+enemy_id = "oil_spill_blob"
+display_name = "Deregulation Tar Blob"
+max_hp = 90.0
+base_damage = 20.0
+sight_radius_tiles = 5
+sprite_texture = ExtResource("2_btppr")
+role = "Hazard Tank"
+realm = 3
+damage_reduction = 0.2
+flavor_text = "Rules are just suggestions with lawyers."

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_ho6ps"]
+[ext_resource type="Texture2D" path="res://assets/sprites/corporate_shark.png" id="2_0724k"]
+
+[resource]
+script = ExtResource("1_ho6ps")
+enemy_id = "corporate_shark"
+display_name = "Corporate Loan Shark"
+max_hp = 80.0
+base_damage = 24.0
+sprite_texture = ExtResource("2_0724k")
+role = "Heavy Melee"
+realm = 3
+damage_reduction = 0.1
+flavor_text = "Low, low APR of 400 percent."

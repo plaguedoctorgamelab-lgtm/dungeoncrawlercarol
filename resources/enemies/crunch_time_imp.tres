@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_bug_report.png" id="1_ruxft"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_kbj8p"]
+[ext_resource type="Texture2D" path="res://assets/sprites/crunch_time_imp.png" id="3_jbmla"]
+
+[resource]
+script = ExtResource("2_kbj8p")
+enemy_id = "crunch_time_imp"
+display_name = "Crunch Time Imp"
+max_hp = 45.0
+base_damage = 16.0
+sight_radius_tiles = 8
+is_ranged = true
+projectile_texture = ExtResource("1_ruxft")
+sprite_texture = ExtResource("3_jbmla")
+role = "Ranged Caster"
+realm = 2
+attack_range_tiles = 5
+flavor_text = "Ship it Friday. Fix it never."

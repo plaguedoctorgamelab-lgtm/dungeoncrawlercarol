@@ -1,0 +1,48 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scenes/tactical/TacticalBattle.gd" id="1_b"]
+[ext_resource type="Script" path="res://scenes/tactical/IsometricGrid.gd" id="2_g"]
+[ext_resource type="Script" path="res://scenes/tactical/GridOverlay.gd" id="3_o"]
+[ext_resource type="PackedScene" path="res://scenes/ui/TacticalHUD.tscn" id="4_h"]
+
+[node name="TacticalBattle" type="Node2D"]
+script = ExtResource("1_b")
+
+[node name="Background" type="CanvasLayer" parent="."]
+layer = -1
+
+[node name="Color" type="ColorRect" parent="Background"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.06, 0.02, 0.12, 1)
+
+[node name="Grid" type="Node2D" parent="."]
+script = ExtResource("2_g")
+
+[node name="Ground" type="TileMapLayer" parent="Grid"]
+
+[node name="Decals" type="Node2D" parent="Grid"]
+
+[node name="Overlay" type="Node2D" parent="Grid"]
+script = ExtResource("3_o")
+
+[node name="Fog" type="TileMapLayer" parent="Grid"]
+z_index = 1
+
+[node name="Objects" type="Node2D" parent="Grid"]
+z_index = 2
+y_sort_enabled = true
+
+[node name="Effects" type="Node2D" parent="Grid"]
+z_index = 3
+
+[node name="LosRay" type="RayCast2D" parent="Grid"]
+enabled = false
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="HUD" parent="." instance=ExtResource("4_h")]

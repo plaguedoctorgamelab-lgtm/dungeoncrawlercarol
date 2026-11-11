@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_jw542"]
+[ext_resource type="Texture2D" path="res://assets/sprites/downsize_executioner.png" id="2_klelk"]
+
+[resource]
+script = ExtResource("1_jw542")
+enemy_id = "downsize_executioner"
+display_name = "Layoff Executioner"
+max_hp = 75.0
+base_damage = 22.0
+sight_radius_tiles = 5
+sprite_texture = ExtResource("2_klelk")
+role = "Heavy Melee"
+realm = 2
+damage_reduction = 0.1
+flavor_text = "We're a family. Anyway, you're fired."

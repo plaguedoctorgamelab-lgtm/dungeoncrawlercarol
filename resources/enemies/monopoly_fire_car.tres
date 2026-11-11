@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_sjkqn"]
+[ext_resource type="Texture2D" path="res://assets/sprites/monopoly_fire_car.png" id="2_e7lqf"]
+
+[resource]
+script = ExtResource("1_sjkqn")
+enemy_id = "monopoly_fire_car"
+display_name = "Corporate Top-Hat Bug"
+max_hp = 50.0
+base_damage = 15.0
+sight_radius_tiles = 7
+sprite_texture = ExtResource("2_e7lqf")
+role = "Fast Disruptor"
+realm = 2
+tiles_per_ap = 2
+flavor_text = "Do not pass GO. Do not collect anything."

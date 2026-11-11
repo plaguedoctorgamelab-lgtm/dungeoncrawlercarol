@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_trident_beam.png" id="1_syjs2"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_g7oix"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea_lord_boss.png" id="3_muhim"]
+
+[resource]
+script = ExtResource("2_g7oix")
+enemy_id = "sea_lord_boss"
+display_name = "The Sea Lord"
+max_hp = 300.0
+base_damage = 40.0
+sight_radius_tiles = 10
+is_ranged = true
+projectile_texture = ExtResource("1_syjs2")
+sprite_texture = ExtResource("3_muhim")
+role = "FINAL BOSS"
+realm = 3
+is_boss = true
+attack_range_tiles = 6
+flavor_text = "Artisan espresso is a threat to shareholder value!"

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_wd1c6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/earth_slime_suit.png" id="2_7fsl4"]
+
+[resource]
+script = ExtResource("1_wd1c6")
+enemy_id = "earth_slime_suit"
+display_name = "Landlord Slime"
+max_hp = 35.0
+base_damage = 10.0
+sprite_texture = ExtResource("2_7fsl4")
+role = "Melee Swarm"
+flavor_text = "Your rent is due. Also, it went up."

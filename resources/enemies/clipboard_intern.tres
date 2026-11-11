@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_3ffn2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/clipboard_intern.png" id="2_u2rid"]
+
+[resource]
+script = ExtResource("1_3ffn2")
+enemy_id = "clipboard_intern"
+display_name = "Unpaid Intern Zombie"
+max_hp = 25.0
+base_damage = 8.0
+sight_radius_tiles = 5
+sprite_texture = ExtResource("2_u2rid")
+role = "Swarm Melee"
+flavor_text = "Working for exposure. And brains."

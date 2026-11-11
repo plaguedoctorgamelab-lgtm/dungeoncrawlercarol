@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_tsmeb"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tax_haven_crab.png" id="2_2rdov"]
+
+[resource]
+script = ExtResource("1_tsmeb")
+enemy_id = "tax_haven_crab"
+display_name = "Offshore Shell Crab"
+max_hp = 70.0
+base_damage = 18.0
+sprite_texture = ExtResource("2_2rdov")
+role = "Armored Tank"
+realm = 3
+damage_reduction = 0.3
+flavor_text = "My assets are in my shell. Literally."

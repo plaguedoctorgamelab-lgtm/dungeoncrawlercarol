@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_tax_receipt.png" id="1_qwsay"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_p0k3c"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tax_auditor_mole.png" id="3_7r47m"]
+
+[resource]
+script = ExtResource("2_p0k3c")
+enemy_id = "tax_auditor_mole"
+display_name = "Tax Auditor Mole"
+max_hp = 30.0
+base_damage = 9.0
+is_ranged = true
+projectile_texture = ExtResource("1_qwsay")
+sprite_texture = ExtResource("3_7r47m")
+role = "Ground Disruptor"
+attack_range_tiles = 4
+flavor_text = "Itemizes your pain. Deducts your joy."

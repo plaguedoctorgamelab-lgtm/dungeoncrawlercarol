@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_5tq63"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bureaucrat_golem.png" id="2_w0mjs"]
+
+[resource]
+script = ExtResource("1_5tq63")
+enemy_id = "bureaucrat_golem"
+display_name = "HOA President Golem"
+max_hp = 160.0
+base_damage = 24.0
+sight_radius_tiles = 8
+sprite_texture = ExtResource("2_w0mjs")
+role = "LEVEL 1 BOSS"
+is_boss = true
+flavor_text = "Your mailbox is two inches too tall. FINED."

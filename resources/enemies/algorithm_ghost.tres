@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_ad_popup.png" id="1_xom3l"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_k0r7x"]
+[ext_resource type="Texture2D" path="res://assets/sprites/algorithm_ghost.png" id="3_m1ns8"]
+
+[resource]
+script = ExtResource("2_k0r7x")
+enemy_id = "algorithm_ghost"
+display_name = "Ad-Tech Ghost"
+base_damage = 10.0
+sight_radius_tiles = 7
+is_ranged = true
+projectile_texture = ExtResource("1_xom3l")
+sprite_texture = ExtResource("3_m1ns8")
+role = "Debuffer / Ghost"
+realm = 1
+attack_range_tiles = 5
+flavor_text = "We value your privacy. (We do not.)"

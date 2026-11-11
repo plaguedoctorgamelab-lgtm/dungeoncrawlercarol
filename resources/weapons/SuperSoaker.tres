@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/weapon_water_pistol.png" id="1_nmgil"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_water_stream.png" id="2_6l3dq"]
+[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="3_4s0g6"]
+
+[resource]
+script = ExtResource("3_4s0g6")
+weapon_id = "super_soaker"
+display_name = "Super Soaker 9000"
+damage = 26.0
+ap_cost = 3
+is_ranged = true
+max_range_tiles = 5
+projectile_texture = ExtResource("2_6l3dq")
+icon = ExtResource("1_nmgil")
+description = "Pressurized neon water. Ruins suits, ruins days."

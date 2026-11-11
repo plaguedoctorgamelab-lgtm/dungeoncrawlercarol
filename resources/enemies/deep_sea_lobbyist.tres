@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_dollar_lure.png" id="1_w0rty"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_nfk3k"]
+[ext_resource type="Texture2D" path="res://assets/sprites/deep_sea_lobbyist.png" id="3_o7heo"]
+
+[resource]
+script = ExtResource("2_nfk3k")
+enemy_id = "deep_sea_lobbyist"
+display_name = "Anglerfish Lobbyist"
+max_hp = 60.0
+base_damage = 22.0
+sight_radius_tiles = 8
+is_ranged = true
+projectile_texture = ExtResource("1_w0rty")
+sprite_texture = ExtResource("3_o7heo")
+role = "Ranged / Lure"
+realm = 3
+attack_range_tiles = 5
+flavor_text = "Just a little campaign contribution..."

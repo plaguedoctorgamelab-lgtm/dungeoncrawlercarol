@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_pat74"]
+[ext_resource type="Texture2D" path="res://assets/sprites/lawn_mower_drone.png" id="2_vt6w0"]
+
+[resource]
+script = ExtResource("1_pat74")
+enemy_id = "lawn_mower_drone"
+display_name = "Karen's Turbo Mower"
+max_hp = 45.0
+base_damage = 14.0
+sight_radius_tiles = 7
+sprite_texture = ExtResource("2_vt6w0")
+role = "Fast Charger"
+tiles_per_ap = 2
+flavor_text = "Would like to speak to your manager at 40 mph."

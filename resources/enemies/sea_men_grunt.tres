@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_water_squirt.png" id="1_f4kdg"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_tednx"]
+[ext_resource type="Texture2D" path="res://assets/sprites/sea_men_grunt.png" id="3_spb7m"]
+
+[resource]
+script = ExtResource("2_tednx")
+enemy_id = "sea_men_grunt"
+display_name = "Sea Men Grunt"
+max_hp = 50.0
+base_damage = 16.0
+sight_radius_tiles = 7
+is_ranged = true
+projectile_texture = ExtResource("1_f4kdg")
+sprite_texture = ExtResource("3_spb7m")
+role = "Swarm Melee"
+realm = 3
+attack_range_tiles = 2
+flavor_text = "Aye aye, middle management!"

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_0sd6d"]
+[ext_resource type="Texture2D" path="res://assets/sprites/venture_capitalist_flame.png" id="2_cldki"]
+
+[resource]
+script = ExtResource("1_0sd6d")
+enemy_id = "venture_capitalist_flame"
+display_name = "VC Flame Imp"
+base_damage = 14.0
+sight_radius_tiles = 7
+sprite_texture = ExtResource("2_cldki")
+role = "Fast Melee"
+realm = 2
+tiles_per_ap = 2
+flavor_text = "Wants forty percent equity in your face."

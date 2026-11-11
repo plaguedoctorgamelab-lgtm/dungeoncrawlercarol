@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="1_yyk7w"]
+[ext_resource type="Texture2D" path="res://assets/sprites/nft_monkey.png" id="2_sqpf6"]
+
+[resource]
+script = ExtResource("1_yyk7w")
+enemy_id = "nft_monkey"
+display_name = "Bored JPEG Ape"
+max_hp = 50.0
+base_damage = 15.0
+sprite_texture = ExtResource("2_sqpf6")
+role = "Melee Brawler"
+realm = 1
+flavor_text = "Right-click this, nerd."
