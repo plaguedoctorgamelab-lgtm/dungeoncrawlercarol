@@ -192,49 +192,33 @@ func _random_cell(min_x: int, max_x: int, avoid: Array[Vector2i]) -> Vector2i:
 ## of crates and vending machines across the middle of the room, plus a few loose props,
 ## so both sides regularly have cover to fight from. Every walkable tile stays connected.
 func _place_terrain(reserved: Array[Vector2i], start: Vector2i) -> void:
-	var crate: Texture2D = SpriteScaler.texture("cover_wooden_crate", "cover")
-	var vending: Texture2D = SpriteScaler.texture("cover_vending_machine", "cover")
 	var spikes: Texture2D = SpriteScaler.texture("hazard_spikes_iso", "item")
-	var shapes: Array = [
-		[Vector2i(0, 0), Vector2i(1, 0)],
-		[Vector2i(0, 0), Vector2i(0, 1)],
-		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
-		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)],
-		[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)],
-	]
-	var clusters := 4 + (1 if grid.width >= 12 else 0)
-	var tries := 0
-	var made := 0
-	while made < clusters and tries < 120:
-		tries += 1
-		var anchor := Vector2i(rng.randi_range(2, grid.width - 4), rng.randi_range(1, grid.height - 3))
-		var shape: Array = shapes[rng.randi_range(0, shapes.size() - 1)]
-		var placed_any := false
-		for k in shape.size():
-			var c: Vector2i = anchor + shape[k]
-			# One vending machine (full cover) per cluster at most; the rest are crates.
-			var is_vending: bool = k == 0 and rng.randf() < 0.55
-			if _try_blocker(c, is_vending, reserved, start, crate, vending):
-				placed_any = true
-		if placed_any:
-			made += 1
-	var loose := rng.randi_range(2, 4)
-	tries = 0
-	while loose > 0 and tries < 100:
-		tries += 1
-		var c := Vector2i(rng.randi_range(0, grid.width - 1), rng.randi_range(0, grid.height - 1))
-		if _try_blocker(c, rng.randf() < 0.3, reserved, start, crate, vending):
-			loose -= 1
+	# Cover is spread out evenly (v0.6): the room is cut into 3x3 blocks and each block gets
+	# at most one prop at a random spot inside it, never touching another prop (not even
+	# diagonally). About 35% are full cover. Earth uses its own trash cans and HOA fences.
+	var block := 3
+	for by in range(0, grid.height, block):
+		for bx in range(0, grid.width, block):
+			if rng.randf() > 0.72:
+				continue
+			for attempt in 8:
+				var c := Vector2i(bx + rng.randi_range(0, block - 1), by + rng.randi_range(0, block - 1))
+				if not _spaced(c):
+					continue
+				if _try_blocker(c, rng.randf() < 0.35, reserved, start):
+					break
 	# Traps: a mix per realm. Earth = spikes + red tape, Air = spikes + live wires,
 	# Fire = live wires + red tape, Water = all three. Espresso machines everywhere.
 	var mix: Array = [["spikes", "tape"], ["spikes", "wire"], ["wire", "tape"], ["spikes", "wire", "tape"]][GameState.realm]
 	var trap_count := rng.randi_range(4, 7)
 	var s := 0
-	tries = 0
+	var tries := 0
 	while s < trap_count and tries < 300:
 		tries += 1
 		var c := Vector2i(rng.randi_range(2, grid.width - 2), rng.randi_range(0, grid.height - 1))
 		if reserved.has(c) or grid.blockers.has(c) or grid.hazards.has(c) or CombatMath.manhattan(c, start) <= 1:
+			continue
+		if _near_hazard(c):
 			continue
 		grid.add_hazard(c, spikes, mix[s % mix.size()])
 		s += 1
@@ -245,6 +229,8 @@ func _place_terrain(reserved: Array[Vector2i], start: Vector2i) -> void:
 		var c := Vector2i(rng.randi_range(3, grid.width - 3), rng.randi_range(1, grid.height - 2))
 		if reserved.has(c) or grid.blockers.has(c) or grid.hazards.has(c) or CombatMath.manhattan(c, start) <= 2:
 			continue
+		if not _spaced(c):
+			continue
 		grid.add_espresso(c)
 		if grid.connected_count(start) != grid.walkable_count():
 			_remove_last_blocker(c)
@@ -252,10 +238,38 @@ func _place_terrain(reserved: Array[Vector2i], start: Vector2i) -> void:
 		machines -= 1
 
 
-func _try_blocker(c: Vector2i, is_vending: bool, reserved: Array[Vector2i], start: Vector2i, crate: Texture2D, vending: Texture2D) -> bool:
+## True if no prop sits on `c` or any of its 8 neighbours.
+func _spaced(c: Vector2i) -> bool:
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if grid.blockers.has(c + Vector2i(dx, dy)):
+				return false
+	return true
+
+
+## True if a trap sits on one of the 8 neighbours (keeps traps from clumping).
+func _near_hazard(c: Vector2i) -> bool:
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if (dx != 0 or dy != 0) and grid.hazards.has(c + Vector2i(dx, dy)):
+				return true
+	return false
+
+
+## Places one cover prop: half cover (crate, or a trash can in the Earth realm) or full
+## cover (vending machine, or an HOA privacy fence in the Earth realm). Keeps every
+## walkable tile connected.
+func _try_blocker(c: Vector2i, full: bool, reserved: Array[Vector2i], start: Vector2i) -> bool:
 	if not grid.in_bounds(c) or reserved.has(c) or grid.blockers.has(c) or CombatMath.manhattan(c, start) <= 1:
 		return false
-	grid.add_blocker(c, "vending" if is_vending else "crate", vending if is_vending else crate, is_vending)
+	var kind := "vending" if full else "crate"
+	if GameState.realm == 0 and rng.randf() < 0.5:
+		kind = "fence" if full else "trash"
+	var tex_id: String = {"crate": "cover_wooden_crate", "vending": "cover_vending_machine", "trash": "cover_trash_can", "fence": "cover_privacy_fence"}[kind]
+	if not ResourceLoader.exists("res://assets/sprites/%s.png" % tex_id):
+		kind = "vending" if full else "crate"
+		tex_id = "cover_vending_machine" if full else "cover_wooden_crate"
+	grid.add_blocker(c, kind, SpriteScaler.texture(tex_id, "cover"), full)
 	if grid.connected_count(start) != grid.walkable_count():
 		_remove_last_blocker(c)
 		return false
@@ -844,6 +858,7 @@ func enemy_shoot_espresso(e: EnemyUnit, c: Vector2i) -> void:
 	e.visible = true
 	e.revealed_until = turn_number + 1
 	SignalBus.say("%s shoots the Overheated Espresso Machine next to Carol!" % e.display_name, UiKit.PINK)
+	e.show_pose("attack", 0.55)
 	AudioManager.play_sfx("enemy_shoot")
 	var dummy := Node2D.new()
 	dummy.position = grid.cell_to_world(c)
@@ -986,6 +1001,7 @@ func enemy_attack(e: EnemyUnit) -> void:
 		chance = maxf(0.05, chance - DASH_EVADE)
 		carol.evasive = false
 	carol.face(e.position)
+	e.show_pose("attack", 0.55)
 	if e.data.is_ranged:
 		AudioManager.play_sfx("enemy_shoot")
 		await _fire(e, carol, e.data.projectile, Color.WHITE)

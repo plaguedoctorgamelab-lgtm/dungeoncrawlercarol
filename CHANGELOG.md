@@ -5,6 +5,34 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 - It's shown on the title screen and in the pause menu, and stamped into the Windows `.exe` properties.
 - Every release is tagged in git as `vX.Y.Z`.
 
+## v0.6.0 — 2026-11-12: "Earth Comes Alive"
+
+### Art Pack 2
+- **Monster frame animation** for the whole Earth realm: Landlord Slime, Karen's Turbo Mower, Unpaid Intern Zombie, Mall Cop Mercenary and Tax Auditor Mole.
+  - Each monster has 2 idle frames, an attack pose and a hurt flinch.
+  - Idle loops are staggered so a squad doesn't breathe in sync.
+  - Monsters strike their attack pose when they attack, and flinch when hit.
+- **HOA President Golem** (realm 1 boss) has six frames:
+  - idle (2 frames)
+  - a raised FINED gavel **wind-up frame**, shown during its CHARGING turn
+  - slam attack
+  - hurt
+  - a **defeated** rubble-pile frame it crumbles into when beaten
+- **Carol's drink and dodge poses** now play when she chugs an Energy Drink or dodges a miss.
+- **Earth realm cover:** dented trash cans (half cover) and HOA privacy fences with a peeking gnome (full cover) are mixed in with the crates and vending machines.
+- `import_art.gd` now also imports:
+  - monster frame sets (`enemies/<id>/`), aligned on a shared foot point, with a `frames.json` per monster
+  - partial Carol deliveries
+
+### Maps and rooms
+- **Twice as many rooms per level:** 30–40 nodes per realm, up from 15–20, in columns of 2–4. The boss is still alone in the last column.
+- **Cover is spread out.** Rooms are split into 3×3 blocks, and each block gets at most one prop, placed so it never touches another prop, not even diagonally. Traps and espresso machines don't clump either. Measured: 0 touching props across sample rooms, which used to be clusters by design.
+
+### Balance note
+- With cover spread out, early fights are a little easier: the bot wins about 100% of Medium Earth fights in about 5 turns. But a run now has about twice as many fights, so HP and Energy Drinks wear down more over a realm. Worth a playtest before re-tuning.
+
+- 217 tests.
+
 ## v0.5.0 — 2026-11-12: "New Art"
 
 The first round of art made from `docs/art_brief.md` is now in the game.

@@ -17,6 +17,9 @@ const INTENT_COLORS := {
 	"unaware": Color("#9a8cb8"),
 }
 const INTENT_GLYPH := {"attack": "!", "move": ">", "charge": "!!", "unaware": "?"}
+const FRAME_ROOT := "res://assets/sprites/enemies/"
+## Frame animations a monster can have (imported by scripts/tools/import_art.gd).
+const FRAME_ANIMS := ["idle", "attack", "hurt", "charge", "defeated"]
 
 var data: EnemyData
 var alerted: bool = false
@@ -32,6 +35,14 @@ var rooted: bool = false
 var sighted: bool = false
 ## Bosses: the tile the charged strike is aimed at (locked when the charge starts).
 var strike_cell: Vector2i = Vector2i(-1, -1)
+## anim -> Array[Texture2D] when this monster has frame art (Art Pack 2+).
+var frames: Dictionary = {}
+var has_frames: bool = false
+var _anim_t: float = 0.0
+## A one-shot pose (attack / hurt) shown until this time.
+var _pose: String = ""
+var _pose_left: float = 0.0
+var _dying: bool = false
 
 
 ## Tiles the charged strike will hit: the locked tile, plus its 4 neighbours for ranged
@@ -58,6 +69,74 @@ func setup(d: EnemyData, hp_scale: float) -> void:
 	name = d.enemy_id
 	size_cells = 2 if d.is_boss else 1
 	set_texture(d.sprite_texture)
+	_load_frames(d.enemy_id)
+
+
+## Loads frame art and lines it up: every frame shares one canvas with the feet on a
+## fixed point (frames.json), stored at 2x, so one scale and offset keep it planted.
+func _load_frames(id: String) -> void:
+	var meta_path := FRAME_ROOT + id + "/frames.json"
+	if not FileAccess.file_exists(meta_path):
+		return
+	var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string(meta_path))
+	if typeof(meta) != TYPE_DICTIONARY:
+		return
+	for a in FRAME_ANIMS:
+		var list: Array[Texture2D] = []
+		for i in range(1, 10):
+			var path := FRAME_ROOT + "%s/%s_%s_%02d.png" % [id, id, a, i]
+			if not ResourceLoader.exists(path):
+				break
+			list.append(load(path))
+		if not list.is_empty():
+			frames[a] = list
+	has_frames = frames.has("idle")
+	if not has_frames:
+		return
+	var canvas := Vector2(meta["canvas"][0], meta["canvas"][1])
+	var foot := Vector2(meta["foot"][0], meta["foot"][1])
+	var idle_h := float(meta["idle_size"][1])
+	var sc := 0.5
+	var sink := SpriteScaler.FOOT_SINK * size_cells
+	sprite.texture = frames["idle"][0]
+	sprite.centered = true
+	sprite.scale = Vector2(sc, sc)
+	sprite.offset = Vector2(canvas.x / 2.0 - foot.x, canvas.y / 2.0 - foot.y + sink / sc)
+	base_scale = sprite.scale
+	bar_y = -idle_h * sc + sink - 14.0
+	# Desynchronise idle loops so a squad doesn't breathe in lockstep.
+	_anim_t = randf() * 2.0
+	queue_redraw()
+
+
+## Holds a one-shot pose ("attack", "hurt") for `seconds`, then returns to idle.
+func show_pose(a: String, seconds: float = 0.45) -> void:
+	if not has_frames or not frames.has(a) or _dying:
+		return
+	_pose = a
+	_pose_left = seconds
+	sprite.texture = frames[a][0]
+
+
+func _process(delta: float) -> void:
+	if not has_frames or _dying:
+		return
+	_anim_t += delta
+	if _pose_left > 0.0:
+		_pose_left -= delta
+		return
+	if charged and frames.has("charge"):
+		sprite.texture = frames["charge"][0]
+		return
+	var idle: Array = frames["idle"]
+	sprite.texture = idle[int(_anim_t * 2.5) % idle.size()]
+
+
+func take_damage(amount: float) -> float:
+	var out := super(amount)
+	if not is_dead():
+		show_pose("hurt", 0.4)
+	return out
 
 
 func attack_damage() -> float:
@@ -101,10 +180,25 @@ func _draw() -> void:
 	draw_string(font2, center + Vector2(-gw / 2.0, 8.0), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color.BLACK)
 
 
-## Death: a pop, a spin and a shrink-fade instead of a plain fade.
+## Death: bosses with a "defeated" frame crumble in place; everyone else pops, spins
+## and shrinks away.
 func play_death() -> void:
 	intent = ""
 	queue_redraw()
+	if has_frames and frames.has("defeated"):
+		_dying = true
+		sprite.texture = frames["defeated"][0]
+		sprite.scale = base_scale
+		var crumble := create_tween()
+		crumble.tween_property(sprite, "scale", base_scale * Vector2(1.08, 0.92), 0.08)
+		crumble.tween_property(sprite, "scale", base_scale, 0.12)
+		crumble.tween_interval(1.4)
+		crumble.tween_property(self, "modulate:a", 0.0, 0.5)
+		crumble.tween_callback(queue_free)
+		return
+	if has_frames and frames.has("hurt"):
+		_dying = true
+		sprite.texture = frames["hurt"][0]
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(sprite, "scale", base_scale * 1.35, 0.08)
 	tw.chain().tween_property(sprite, "scale", base_scale * 0.1, 0.32).set_ease(Tween.EASE_IN)

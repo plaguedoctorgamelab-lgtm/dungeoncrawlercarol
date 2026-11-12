@@ -1,12 +1,12 @@
 class_name OverworldGenerator
 extends RefCounted
 ## Procedural Slay-the-Spire-style branching node tree (GDD 3.3).
-## - 15-20 nodes laid out in layers of 2-3 (the last layer may be smaller)
+## - 30-40 nodes (v0.6: twice as many rooms per level) laid out in columns of 2-4
 ## - Boss spawns randomly in the final 25% of nodes (by node number)
 ## - Every path eventually reaches the boss
 
-const MIN_NODES := 15
-const MAX_NODES := 20
+const MIN_NODES := 30
+const MAX_NODES := 40
 
 
 static func generate(seed_value: int, realm: int) -> Dictionary:
@@ -19,7 +19,7 @@ static func generate(seed_value: int, realm: int) -> Dictionary:
 	var layer_sizes: Array[int] = []
 	var remaining := total - 1
 	while remaining > 0:
-		var s := mini(rng.randi_range(2, 3), remaining)
+		var s := mini(rng.randi_range(2, 4), remaining)
 		if remaining - s == 1:
 			s += 1
 		layer_sizes.append(s)

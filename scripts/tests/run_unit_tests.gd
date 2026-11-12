@@ -4,7 +4,7 @@ extends SceneTree
 ## Exits with the number of failed checks (0 = all passed).
 
 ## Raise this when you add checks; fewer means a test function crashed part-way.
-const MIN_CHECKS := 209
+const MIN_CHECKS := 216
 
 var failures: int = 0
 var checks: int = 0
@@ -54,6 +54,8 @@ func _run() -> void:
 	await _test_v03()
 	print("== v0.4 traps & enemy cards ==")
 	await _test_v04()
+	print("== v0.6 art pack 2, bigger maps, spread-out cover ==")
+	await _test_v06()
 	print("== Victory screen ==")
 	await _test_victory()
 
@@ -141,7 +143,7 @@ func _test_overworld() -> void:
 			var m: Dictionary = OverworldGenerator.generate(1000 + s * 17 + realm, realm)
 			var n: int = m["nodes"].size()
 			var boss: int = m["boss_id"]
-			var ok := n >= 15 and n <= 20 and boss >= int(ceil(n * 0.75)) and boss < n
+			var ok := n >= 30 and n <= 40 and boss >= int(ceil(n * 0.75)) and boss < n
 			# The boss sits alone in the final layer.
 			var last_layer: int = int(m["layer_count"]) - 1
 			var in_last := 0
@@ -163,7 +165,7 @@ func _test_title() -> void:
 	check(title != null and title.name == "TitleScreen", "boots into TitleScreen")
 	check(title.find_children("Difficulty*", "Button", true, false).size() == 4, "4 difficulty selectors")
 	var ver = title.find_child("VersionLabel", true, false)
-	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.5.0", "title shows release number %s" % ("" if ver == null else ver.text))
+	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.6.0", "title shows release number %s" % ("" if ver == null else ver.text))
 	title.selected_difficulty = 1
 	title.start_new_game()
 	await process_frame
@@ -174,7 +176,7 @@ func _test_title() -> void:
 	await process_frame
 	await process_frame
 	check(current_scene.name == "NodeMap", "How to Play continues to the overworld")
-	check(gs.map_data["nodes"].size() >= 15, "overworld generated with %d nodes" % gs.map_data["nodes"].size())
+	check(gs.map_data["nodes"].size() >= 30, "overworld generated with %d nodes" % gs.map_data["nodes"].size())
 
 
 func _test_overworld_scene() -> void:
@@ -234,7 +236,7 @@ func _test_tactical() -> void:
 	var csize: Vector2 = csprite.texture.get_size() * csprite.scale
 	if battle.carol.has_frames:
 		check(absf(csprite.scale.y * battle.carol.FRAME_BODY - 128.0) < 0.5, "Carol (frame art) drawn 128px tall")
-		check(battle.carol.frames.size() == 7 and battle.carol.frames["walk"].size() == 6, "all 7 Carol frame animations load (walk = 6 frames)")
+		check(battle.carol.frames.size() == 9 and battle.carol.frames["walk"].size() == 6, "all 9 Carol frame animations load (walk = 6 frames)")
 	else:
 		check(csize.x <= 128.5 and csize.y <= 128.5 and maxf(csize.x, csize.y) >= 127.5, "Carol drawn at a 128px footprint")
 	check(battle.grid.is_cell_visible(battle.carol.cell), "fog: Carol's tile is visible")
@@ -762,3 +764,47 @@ func _test_v04() -> void:
 	battle._on_sighted(e)
 	check(not battle.hud.is_intro_showing(), "a monster already met doesn't show the card again")
 	check(gs.to_dict().has("bestiary"), "met monsters are saved with the run")
+
+
+func _test_v06() -> void:
+	# --- Spread-out cover: no two props touch, across several rooms of every realm.
+	var touching := 0
+	var props := 0
+	var earth_kinds := {}
+	for i in 6:
+		var b = await _start_battle(i % 4, false)
+		var g = b.grid
+		for c in g.blockers:
+			if g.blockers[c] == "cage":
+				continue
+			props += 1
+			if i % 4 == 0:
+				earth_kinds[g.blockers[c]] = true
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					var n: Vector2i = c + Vector2i(dx, dy)
+					if (dx != 0 or dy != 0) and g.blockers.has(n) and g.blockers[n] != "cage":
+						touching += 1
+	check(props > 30 and touching == 0, "cover is spread out: %d props, %d touching pairs" % [props, touching])
+	check(earth_kinds.has("trash") or earth_kinds.has("fence"), "Earth rooms use the new trash cans / HOA fences %s" % str(earth_kinds.keys()))
+
+	# --- Monster frame animation (Art Pack 2).
+	var battle = await _start_battle(0, true)
+	var boss = battle.enemies[0]
+	check(boss.has_frames and boss.frames.has("charge") and boss.frames.has("defeated"), "HOA Golem has idle / charge / attack / hurt / defeated frames")
+	var animated := 0
+	for e in battle.enemies:
+		if e.has_frames:
+			animated += 1
+	check(animated == battle.enemies.size(), "every Earth monster in the fight is frame-animated (%d/%d)" % [animated, battle.enemies.size()])
+	var e = battle.enemies[1]
+	e.show_pose("attack", 0.5)
+	check(e.sprite.texture == e.frames["attack"][0], "monsters show their attack pose")
+	e.take_damage(1.0)
+	check(e.sprite.texture == e.frames["hurt"][0], "monsters flinch with their hurt frame")
+	boss.charged = true
+	boss._pose_left = 0.0
+	await process_frame
+	check(boss.sprite.texture == boss.frames["charge"][0], "the Golem shows its wind-up frame while CHARGING")
+	boss.charged = false
+	check(battle.carol.frames.has("drink") and battle.carol.frames.has("dodge"), "Carol has drink and dodge frames")

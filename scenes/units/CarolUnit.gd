@@ -16,7 +16,7 @@ const HOP_HEIGHT := 18.0
 const DASH_STEP_TIME := 0.08
 const SWIPE_COLORS := [Color("#ff2bd6"), Color("#00f0ff"), Color("#ffe600")]
 const FRAME_DIR := "res://assets/sprites/carol/"
-const FRAME_ANIMS := ["idle", "walk", "attack", "shoot", "hit", "down", "victory"]
+const FRAME_ANIMS := ["idle", "walk", "attack", "shoot", "hit", "down", "victory", "drink", "dodge"]
 ## Frame canvas from import_art.gd: feet sit at FRAME_FOOT; the idle pose is FRAME_BODY tall.
 const FRAME_CANVAS := Vector2(440, 320)
 const FRAME_FOOT := Vector2(220, 300)
@@ -368,7 +368,10 @@ func play_dodge(from_pos: Vector2) -> void:
 	if _dead:
 		return
 	anim = "dodge"
-	show_frame("walk", 3)
+	if frames.has("dodge"):
+		show_frame("dodge", 1)
+	else:
+		show_frame("walk", 3)
 	var side := -1.0 if from_pos.x > position.x else 1.0
 	var tw := _tw()
 	tw.tween_property(sprite, "position", Vector2(18.0 * side, -6.0), 0.07)
@@ -381,7 +384,10 @@ func play_dodge(from_pos: Vector2) -> void:
 ## Drink: tilt back to chug, glow green and fizz bubbles.
 func play_drink() -> void:
 	anim = "drink"
-	show_frame("idle", 2)
+	if frames.has("drink"):
+		show_frame("drink", 1)
+	else:
+		show_frame("idle", 2)
 	var f := _facing
 	var tw := _tw().set_parallel(true)
 	tw.tween_property(sprite, "rotation", -0.32 * f * (0.6 if has_frames else 1.0), 0.15)
