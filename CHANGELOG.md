@@ -5,6 +5,41 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 - It's shown on the title screen and in the pause menu, and stamped into the Windows `.exe` properties.
 - Every release is tagged in git as `vX.Y.Z`.
 
+## v0.4.0 — 2026-11-12: "Traps & Drama"
+
+### New traps
+Each realm gets a different mix:
+- **Earth:** spikes and red tape
+- **Air:** spikes and live wires
+- **Fire:** live wires and red tape
+- **Water:** all three
+
+The traps:
+- **Live Wire:** downed cables that **spark on every other turn**, dealing 12 damage to anyone standing on or stepping onto one while it's live. Hover text says whether it's sparking now or next turn.
+- **Red Tape:** a sticky tangle that **roots** whoever steps in it. They can't move again this turn, but can still attack.
+- **Overheated Espresso Machine:** a half-cover prop that **explodes** for 25 damage to Carol and 32 to monsters on the 8 surrounding tiles.
+  - It goes off if anyone hits it (Carol can click it with any weapon, and it can't miss) or a monster is **shoved into it**.
+  - Explosions chain into neighbouring machines.
+  - Monsters with guns will **shoot a machine next to Carol**.
+- Every trap hurts monsters too, and the enemy AI routes around them.
+- The new traps and the espresso machine are drawn procedurally so they fit the grid exactly until real art arrives (see `docs/art_brief.md`). If `trap_espresso_machine.png` is added, it's used automatically.
+
+### Drama
+- **NEW THREAT! card:** the first time a monster type appears in a run, a big card slams in with its portrait, name, role, stats and flavor line, plus a sound sting. Click or press any key to dismiss it; it also goes away by itself after 4 s.
+- Bosses always get a **BOSS FIGHT!** card.
+- Monster types you've already met just get a "spotted!" log line. Met monsters are saved with the run.
+- **Enemy hover card:** hovering a monster shows a portrait card with its name, role, HP, damage, range, speed, armor and what it plans to do next turn.
+- New sounds: zap, red tape, explosion and a new-enemy sting.
+
+### Art pipeline
+- `docs/art_brief.md`: exact image-generator prompts for obstacles, trap tiles and Carol's frame-by-frame animation.
+- `docs/art_guides/*.png`: fit-guide templates, made by `tools/make_art_guides.py`.
+
+### Project
+- The test runner now fails if fewer checks run than expected, since a crashed test used to pass silently.
+- Fixed a crash-in-waiting where a queued enemy card referenced a monster that had died.
+- 208 tests.
+
 ## v0.3.0 — 2026-11-12: "Telegraphs & Tunes"
 
 This release implements the immediate recommendations from both evaluations:

@@ -58,10 +58,18 @@ func _run() -> void:
 		battle._refresh_player_view()
 		for e in battle.enemies:
 			e.visible = true
+		# Realm 1 keeps the NEW THREAT card up; the boss shot shows the board and hover card.
+		if realm == 3:
+			while battle.hud.is_intro_showing():
+				battle.hud.dismiss_intro()
 		var e0 = battle.enemies[0]
 		battle.hovered_cell = e0.cell
 		battle._update_hover()
 		await _wait(5)
+		if realm == 3:
+			while battle.hud.is_intro_showing():
+				battle.hud.dismiss_intro()
+			await _wait(12)
 		await _snap("03_battle_realm%d.png" % (realm + 1))
 	change_scene_to_file("res://scenes/ui/VictoryScreen.tscn")
 	await _wait(90)

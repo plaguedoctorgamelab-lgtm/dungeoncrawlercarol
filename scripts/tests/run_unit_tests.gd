@@ -3,6 +3,9 @@ extends SceneTree
 ## godot --headless --script res://scripts/tests/run_unit_tests.gd
 ## Exits with the number of failed checks (0 = all passed).
 
+## Raise this when you add checks; fewer means a test function crashed part-way.
+const MIN_CHECKS := 208
+
 var failures: int = 0
 var checks: int = 0
 var gs: Node
@@ -49,10 +52,17 @@ func _run() -> void:
 	_test_save()
 	print("== v0.3 features ==")
 	await _test_v03()
+	print("== v0.4 traps & enemy cards ==")
+	await _test_v04()
 	print("== Victory screen ==")
 	await _test_victory()
 
 	Engine.time_scale = 1.0
+	# A script error aborts a test function silently, so a low check count means something
+	# crashed even if every check that did run passed.
+	if checks < MIN_CHECKS:
+		failures += 1
+		printerr("  FAIL  only %d checks ran (expected at least %d) - a test crashed" % [checks, MIN_CHECKS])
 	print("\n%d checks, %d failures" % [checks, failures])
 	print("RESULT: %s" % ("ALL TESTS PASSED" if failures == 0 else "FAILED"))
 	quit(failures)
@@ -153,7 +163,7 @@ func _test_title() -> void:
 	check(title != null and title.name == "TitleScreen", "boots into TitleScreen")
 	check(title.find_children("Difficulty*", "Button", true, false).size() == 4, "4 difficulty selectors")
 	var ver = title.find_child("VersionLabel", true, false)
-	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.3.0", "title shows release number %s" % ("" if ver == null else ver.text))
+	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.4.0", "title shows release number %s" % ("" if ver == null else ver.text))
 	title.selected_difficulty = 1
 	title.start_new_game()
 	await process_frame
@@ -190,8 +200,13 @@ func _start_battle(realm: int, boss: bool) -> Node:
 	gs.start_realm(realm)
 	var node_id: int = gs.map_data["boss_id"] if boss else gs.available_nodes()[0]
 	gs.pending_node = node_id
+	var old := current_scene
 	change_scene_to_file("res://scenes/tactical/TacticalBattlefield.tscn")
 	await process_frame
+	var wait := 0
+	while (current_scene == null or current_scene == old) and wait < 60:
+		await process_frame
+		wait += 1
 	var battle := current_scene
 	var guard := 0
 	while not battle.ready_done and guard < 200:
@@ -621,3 +636,125 @@ func _test_v03() -> void:
 	check(save.load_game(1) and save.last_load_was_flee and gs.run_seed != 999 and gs.realm == 0, "EXTREME: loading a save left mid-battle = permadeath, new run")
 	check(not save.has_save(1), "the fled run's save is gone")
 	save.wipe_save(1)
+
+
+func _test_v04() -> void:
+	var battle = await _start_battle(3, false)
+	var g = battle.grid
+	var kinds := {}
+	for c in g.hazards:
+		kinds[g.trap_kind(c)] = true
+	var machines := 0
+	for c in g.blockers:
+		if g.blockers[c] == "espresso":
+			machines += 1
+	check(kinds.size() >= 2 and machines >= 1, "rooms get a trap mix %s and %d espresso machine(s)" % [str(kinds.keys()), machines])
+
+	var area: Array = []
+	for x in range(1, 10):
+		for y in range(2, 9):
+			area.append(Vector2i(x, y))
+	_clear(battle, area)
+	for c in area:
+		g.hazards.erase(c)
+	_park_enemies(battle, null)
+	await physics_frame
+	battle.forced_roll = 1.0
+
+	# --- Live wire: harmless while dark, -12 when sparking.
+	var wc := Vector2i(3, 4)
+	g.add_hazard(wc, null, "wire")
+	g.set_wires_active(false)
+	battle.carol.place(wc, g.cell_to_world(wc))
+	battle.carol.hp = battle.carol.max_hp
+	battle._after_carol_step()
+	check(battle.carol.hp == battle.carol.max_hp, "live wire is harmless while dark")
+	g.set_wires_active(true)
+	battle._after_carol_step()
+	check(is_equal_approx(battle.carol.hp, battle.carol.max_hp - battle.WIRE_DAMAGE), "live wire zaps Carol for %d while sparking" % int(battle.WIRE_DAMAGE))
+	g.set_wires_active(false)
+	battle.carol.hp = battle.carol.max_hp
+
+	# --- Red tape stops Carol mid-move; she can't move again this turn.
+	var start := Vector2i(2, 6)
+	var tape := Vector2i(3, 6)
+	g.add_hazard(tape, null, "tape")
+	battle.carol.place(start, g.cell_to_world(start))
+	battle.carol.ap = 4
+	battle.carol.rooted = false
+	battle.phase = battle.Phase.PLAYER
+	battle._refresh_player_view()
+	await battle.player_move(Vector2i(5, 6))
+	check(battle.carol.cell == tape and battle.carol.rooted, "red tape stops Carol where she steps in it")
+	check(battle.reachable_cells.is_empty(), "rooted Carol can't move again this turn")
+	battle.carol.rooted = false
+
+	# --- Monsters get stuck in tape too.
+	var e = battle.enemies[0]
+	e.rooted = false
+	e.place(Vector2i(7, 3), g.cell_to_world(Vector2i(7, 3)))
+	g.add_hazard(Vector2i(7, 3), null, "tape")
+	await battle.enemy_stepped(e)
+	check(e.rooted, "monsters get tangled in red tape")
+	e.rooted = false
+
+	# --- Espresso machine: shoot it, monsters next to it get blasted, Carol out of range is fine.
+	var mc := Vector2i(7, 6)
+	g.add_espresso(mc)
+	e.place(Vector2i(8, 6), g.cell_to_world(Vector2i(8, 6)))
+	e.hp = e.max_hp
+	battle.carol.place(Vector2i(3, 6), g.cell_to_world(Vector2i(3, 6)))
+	battle.carol.hp = battle.carol.max_hp
+	battle.carol.ap = 4
+	gs.give_weapon("nailgun")
+	gs.equipped_weapon = "nailgun"
+	battle._update_fog()
+	await physics_frame
+	check(battle.can_hit_espresso(mc), "Carol can target the espresso machine")
+	var ok: bool = await battle.player_attack_espresso(mc)
+	check(ok and not g.blockers.has(mc), "shooting the espresso machine blows it up")
+	check(is_equal_approx(e.hp, e.max_hp - battle.EXPLOSION_ENEMY_DAMAGE), "the blast hits the monster next to it (-%d)" % int(battle.EXPLOSION_ENEMY_DAMAGE))
+	check(battle.carol.hp == battle.carol.max_hp, "Carol out of the blast is unhurt")
+
+	# --- Chain reaction.
+	g.add_espresso(Vector2i(6, 3))
+	g.add_espresso(Vector2i(7, 3))
+	await battle.explode(Vector2i(6, 3))
+	check(not g.blockers.has(Vector2i(7, 3)), "explosions chain into neighbouring machines")
+
+	# --- Shoving a monster into a machine sets it off.
+	e.hp = e.max_hp
+	battle.carol.place(Vector2i(4, 6), g.cell_to_world(Vector2i(4, 6)))
+	e.place(Vector2i(5, 6), g.cell_to_world(Vector2i(5, 6)))
+	g.add_espresso(Vector2i(6, 6))
+	battle.carol.ap = 4
+	battle.phase = battle.Phase.PLAYER
+	battle._refresh_player_view()
+	await battle.player_shove(e)
+	check(not g.blockers.has(Vector2i(6, 6)) and e.hp < e.max_hp, "shoving a monster into an espresso machine explodes it")
+
+	# --- Shooters target a machine next to Carol.
+	e.hp = e.max_hp
+	e.data = gs.enemy_data("gated_community_guard")
+	battle.carol.place(Vector2i(3, 5), g.cell_to_world(Vector2i(3, 5)))
+	g.add_espresso(Vector2i(4, 5))
+	e.place(Vector2i(8, 5), g.cell_to_world(Vector2i(8, 5)))
+	await physics_frame
+	check(battle.ai._espresso_near_carol(e) == Vector2i(4, 5), "shooters spot an espresso machine next to Carol")
+
+	# --- Enemy cards.
+	battle.hud.show_enemy_card(e)
+	var card = battle.hud.find_child("EnemyCard", true, false)
+	check(card != null and card.visible, "hovering a monster shows its card")
+	battle.hud.show_enemy_card(null)
+	check(not card.visible, "card hides when not hovering")
+	gs.bestiary.clear()
+	while battle.hud.is_intro_showing():
+		battle.hud.dismiss_intro()
+	battle._on_sighted(e)
+	check(battle.hud.is_intro_showing() and gs.bestiary.has(e.data.enemy_id), "first sighting shows a NEW THREAT card and records the monster")
+	while battle.hud.is_intro_showing():
+		battle.hud.dismiss_intro()
+	battle._on_sighted(e)
+	check(not battle.hud.is_intro_showing(), "a monster already met doesn't show the card again")
+	check(gs.to_dict().has("bestiary"), "met monsters are saved with the run")

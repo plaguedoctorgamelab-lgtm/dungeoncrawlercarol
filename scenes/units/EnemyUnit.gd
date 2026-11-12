@@ -26,6 +26,10 @@ var revealed_until: int = -1
 var intent: String = ""
 ## Bosses: true while winding up a big attack that lands next turn.
 var charged: bool = false
+## Stuck in red tape: can't move again this turn (cleared when its turn starts).
+var rooted: bool = false
+## Has Carol seen this monster yet this battle (for the NEW THREAT card).
+var sighted: bool = false
 ## Bosses: the tile the charged strike is aimed at (locked when the charge starts).
 var strike_cell: Vector2i = Vector2i(-1, -1)
 
@@ -58,6 +62,19 @@ func setup(d: EnemyData, hp_scale: float) -> void:
 
 func attack_damage() -> float:
 	return data.base_damage * GameState.enemy_dmg_scale()
+
+
+## One-line stat summary for the enemy cards.
+func stats_text() -> String:
+	var rng_txt := "melee" if not data.is_ranged else "%d tiles" % data.attack_range_tiles
+	var parts := ["HP %d/%d" % [int(hp), int(max_hp)], "DMG %d" % int(attack_damage()), "RANGE %s" % rng_txt]
+	if data.tiles_per_ap > 1:
+		parts.append("FAST (%d tiles/AP)" % data.tiles_per_ap)
+	if data.damage_reduction > 0.0:
+		parts.append("ARMOR %d%%" % int(data.damage_reduction * 100))
+	if data.is_boss:
+		parts.append("2x2 BOSS")
+	return "   ".join(parts)
 
 
 func _draw() -> void:

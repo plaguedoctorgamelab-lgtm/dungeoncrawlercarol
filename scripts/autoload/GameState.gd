@@ -58,6 +58,8 @@ var run_seed: int = 0
 var overworld_banner: String = ""
 ## Weapon handed out by start_realm (shown in the realm banner).
 var realm_gift: String = ""
+## Monster ids Carol has already met this run (first sighting shows a NEW THREAT card).
+var bestiary: Array[String] = []
 
 var rng := RandomNumberGenerator.new()
 
@@ -102,6 +104,7 @@ func new_run(diff: int, seed_value: int = -1) -> void:
 	battles_won = 0
 	enemies_defeated = 0
 	battle_in_progress = -1
+	bestiary.clear()
 	run_seed = seed_value if seed_value >= 0 else int(Time.get_unix_time_from_system()) ^ rng.randi()
 	rng.seed = run_seed
 	start_realm(0)
@@ -285,6 +288,7 @@ func to_dict() -> Dictionary:
 		"current_node": current_node,
 		"visited": visited.duplicate(),
 		"battle_in_progress": battle_in_progress,
+		"bestiary": bestiary.duplicate(),
 		"battles_won": battles_won,
 		"enemies_defeated": enemies_defeated,
 		"run_seed": run_seed,
@@ -315,6 +319,9 @@ func from_dict(d: Dictionary) -> void:
 	for v in d.get("visited", []):
 		visited.append(int(v))
 	battle_in_progress = int(d.get("battle_in_progress", -1))
+	bestiary.clear()
+	for b in d.get("bestiary", []):
+		bestiary.append(String(b))
 	battles_won = int(d.get("battles_won", 0))
 	enemies_defeated = int(d.get("enemies_defeated", 0))
 	run_seed = int(d.get("run_seed", 0))

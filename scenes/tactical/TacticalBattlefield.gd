@@ -20,6 +20,11 @@ const ENEMY_AI := preload("res://scenes/tactical/EnemyAI.gd")
 enum Phase { SETUP, PLAYER, BUSY, ENEMY, ENDED }
 
 const SPIKE_DAMAGE := 8.0
+## Live wire zap (anyone on a sparking wire) and Overheated Espresso Machine blast.
+const WIRE_DAMAGE := 12.0
+const EXPLOSION_DAMAGE := 25.0
+## Monsters take a bit more from the blast (it's mostly a weapon for Carol).
+const EXPLOSION_ENEMY_DAMAGE := 32.0
 ## Spikes hurt monsters more (they get shoved onto them on purpose).
 const ENEMY_SPIKE_DAMAGE := 15.0
 ## Damage when a shoved monster slams into something solid.
@@ -220,16 +225,31 @@ func _place_terrain(reserved: Array[Vector2i], start: Vector2i) -> void:
 		var c := Vector2i(rng.randi_range(0, grid.width - 1), rng.randi_range(0, grid.height - 1))
 		if _try_blocker(c, rng.randf() < 0.3, reserved, start, crate, vending):
 			loose -= 1
-	var spike_count := rng.randi_range(3, 6)
+	# Traps: a mix per realm. Earth = spikes + red tape, Air = spikes + live wires,
+	# Fire = live wires + red tape, Water = all three. Espresso machines everywhere.
+	var mix: Array = [["spikes", "tape"], ["spikes", "wire"], ["wire", "tape"], ["spikes", "wire", "tape"]][GameState.realm]
+	var trap_count := rng.randi_range(4, 7)
 	var s := 0
 	tries = 0
-	while s < spike_count and tries < 200:
+	while s < trap_count and tries < 300:
 		tries += 1
 		var c := Vector2i(rng.randi_range(2, grid.width - 2), rng.randi_range(0, grid.height - 1))
-		if reserved.has(c) or grid.blockers.has(c) or grid.hazards.has(c):
+		if reserved.has(c) or grid.blockers.has(c) or grid.hazards.has(c) or CombatMath.manhattan(c, start) <= 1:
 			continue
-		grid.add_hazard(c, spikes)
+		grid.add_hazard(c, spikes, mix[s % mix.size()])
 		s += 1
+	var machines := rng.randi_range(1, 2)
+	tries = 0
+	while machines > 0 and tries < 200:
+		tries += 1
+		var c := Vector2i(rng.randi_range(3, grid.width - 3), rng.randi_range(1, grid.height - 2))
+		if reserved.has(c) or grid.blockers.has(c) or grid.hazards.has(c) or CombatMath.manhattan(c, start) <= 2:
+			continue
+		grid.add_espresso(c)
+		if grid.connected_count(start) != grid.walkable_count():
+			_remove_last_blocker(c)
+			continue
+		machines -= 1
 
 
 func _try_blocker(c: Vector2i, is_vending: bool, reserved: Array[Vector2i], start: Vector2i, crate: Texture2D, vending: Texture2D) -> bool:
@@ -244,6 +264,10 @@ func _try_blocker(c: Vector2i, is_vending: bool, reserved: Array[Vector2i], star
 
 func _remove_last_blocker(c: Vector2i) -> void:
 	grid.remove_blocker(c)
+
+
+func is_espresso(c: Vector2i) -> bool:
+	return grid.blockers.get(c, "") == "espresso"
 
 
 # ------------------------------------------------------------------ queries
@@ -360,9 +384,24 @@ func start_player_turn() -> void:
 		return
 	turn_number += 1
 	carol.ap = carol.max_ap
+	carol.rooted = false
 	dash_used = false
 	mode = ""
 	phase = Phase.PLAYER
+	# Live wires spark on even turns. Anyone standing on one when it switches on gets zapped.
+	var wires_on := turn_number % 2 == 0
+	if wires_on != grid.wires_active:
+		grid.set_wires_active(wires_on)
+		if wires_on and not grid.trap_nodes.is_empty():
+			SignalBus.say("The live wires are SPARKING this turn!", UiKit.TEAL)
+			AudioManager.play_sfx("zap")
+			if grid.trap_kind(carol.cell) == "wire":
+				_damage_carol(WIRE_DAMAGE, "ZAP! Carol is standing on a live wire (-%d HP)." % int(WIRE_DAMAGE), carol.position)
+				if phase == Phase.ENDED:
+					return
+			for e in enemies.duplicate():
+				if not e.is_dead() and grid.trap_kind(e.cell) == "wire":
+					await enemy_stepped(e)
 	SignalBus.phase_changed.emit("PLAYER PHASE - TURN %d" % turn_number)
 	AudioManager.play_sfx("turn_player")
 	_refresh_player_view()
@@ -385,7 +424,9 @@ func end_player_turn() -> void:
 
 func _refresh_player_view() -> void:
 	var player := phase == Phase.PLAYER
-	if player and mode == "dash":
+	if player and carol.rooted:
+		reachable_cells = {}
+	elif player and mode == "dash":
 		reachable_cells = grid.reachable(carol.cell, GameState.DASH_TILES, occupied_cells(carol))
 	elif player:
 		reachable_cells = grid.reachable(carol.cell, carol.ap, occupied_cells(carol))
@@ -497,6 +538,7 @@ func _update_hover() -> void:
 	overlay.path.clear()
 	var info := ""
 	var e := enemy_at(hovered_cell)
+	hud.show_enemy_card(e if is_enemy_targetable(e) else null)
 	if is_enemy_targetable(e):
 		if mode == "shove":
 			SignalBus.hit_preview.emit(-1.0, "")
@@ -516,6 +558,9 @@ func _update_hover() -> void:
 					why += " - need %d AP" % w.ap_cost
 			SignalBus.hit_preview.emit(chance, "%s  HP %d/%d  [%s]" % [e.display_name, int(e.hp), int(e.max_hp), why])
 			info = "%s - %s\nNext turn: %s\n\"%s\"" % [e.display_name, e.data.role, EnemyUnit.INTENT_TEXT.get(e.intent, ""), e.data.flavor_text]
+	elif is_espresso(hovered_cell) and grid.explored.has(hovered_cell):
+		SignalBus.hit_preview.emit(-1.0, "")
+		info = "OVERHEATED ESPRESSO MACHINE (half cover)\nHit it with any weapon or shove a monster into it: it EXPLODES, -%d HP to everyone on the 8 tiles around it (monsters -%d). Careful - monsters can shoot it too!%s" % [int(EXPLOSION_DAMAGE), int(EXPLOSION_ENEMY_DAMAGE), "\nClick to blow it up (%d AP)." % GameState.current_weapon().ap_cost if can_hit_espresso(hovered_cell) else ""]
 	else:
 		SignalBus.hit_preview.emit(-1.0, "")
 		if reachable_cells.has(hovered_cell) and mode != "shove":
@@ -531,9 +576,22 @@ func _update_hover() -> void:
 					best_cover = maxi(best_cover, grid.cover_between(t.nearest_cell(hovered_cell), hovered_cell))
 			if not threats.is_empty():
 				danger += "  Your cover: %s." % CombatMath.COVER_NAMES[best_cover]
-			info = "%s here: %d AP%s\n%s" % ["Dash" if mode == "dash" else "Move", cost, "  (SPIKES! -%d HP)" % int(SPIKE_DAMAGE) if grid.hazards.has(hovered_cell) else "", danger]
+			info = "%s here: %d AP%s\n%s" % ["Dash" if mode == "dash" else "Move", cost, _trap_note(hovered_cell), danger]
+		elif grid.hazards.has(hovered_cell) and grid.explored.has(hovered_cell):
+			info = _trap_note(hovered_cell).strip_edges()
 	hud.set_hover_info(info)
 	overlay.queue_redraw()
+
+
+func _trap_note(c: Vector2i) -> String:
+	match grid.trap_kind(c):
+		"spikes":
+			return "  SPIKES! -%d HP" % int(SPIKE_DAMAGE)
+		"wire":
+			return "  LIVE WIRE: %s" % ("SPARKING NOW, -%d HP" % int(WIRE_DAMAGE) if grid.wires_active else "safe this turn, sparks next turn")
+		"tape":
+			return "  RED TAPE: you'll be stuck (no more moving this turn)"
+	return ""
 
 
 func click_cell(c: Vector2i) -> void:
@@ -550,6 +608,8 @@ func click_cell(c: Vector2i) -> void:
 		return
 	if is_enemy_targetable(e):
 		await player_attack(e)
+	elif is_espresso(c) and grid.is_cell_visible(c):
+		await player_attack_espresso(c)
 	elif reachable_cells.has(c):
 		await player_move(c)
 
@@ -581,6 +641,8 @@ func player_move(target: Vector2i) -> bool:
 		_after_carol_step()
 		if phase == Phase.ENDED:
 			return true
+		if carol.rooted:
+			break
 	phase = Phase.PLAYER
 	_refresh_player_view()
 	return true
@@ -605,6 +667,8 @@ func player_dash(target: Vector2i) -> bool:
 		_after_carol_step()
 		if phase == Phase.ENDED:
 			return true
+		if carol.rooted:
+			break
 	SignalBus.say("Carol DASHES! The next attack on her is 25% less likely to hit.", UiKit.TEAL)
 	phase = Phase.PLAYER
 	_refresh_player_view()
@@ -629,7 +693,11 @@ func player_shove(e: EnemyUnit) -> bool:
 	var dir := e.cell - carol.cell
 	var dest := e.cell + dir
 	var blocked := not grid.is_walkable(dest) or occupied_cells(e).has(dest)
-	if blocked:
+	if blocked and is_espresso(dest):
+		SignalBus.say("Carol shoves %s right into the Overheated Espresso Machine!" % e.display_name, UiKit.YELLOW)
+		await e.lunge(grid.cell_to_world(dest))
+		await explode(dest)
+	elif blocked:
 		AudioManager.play_sfx("slam")
 		var dmg := SLAM_DAMAGE * GameState.carol_damage_mult()
 		_popup(e, "SLAM -%d" % int(dmg), UiKit.YELLOW)
@@ -657,20 +725,47 @@ func _after_carol_step() -> void:
 			AudioManager.play_sfx("pickup")
 			SignalBus.say(d.collect(), UiKit.GREEN)
 			SignalBus.inventory_changed.emit()
-	if grid.hazards.has(carol.cell):
-		AudioManager.play_sfx("spikes")
-		_damage_carol(SPIKE_DAMAGE, "Spike trap! Carol takes %d damage." % int(SPIKE_DAMAGE), carol.position)
+	match grid.trap_kind(carol.cell):
+		"spikes":
+			AudioManager.play_sfx("spikes")
+			_damage_carol(SPIKE_DAMAGE, "Spike trap! Carol takes %d damage." % int(SPIKE_DAMAGE), carol.position)
+		"wire":
+			if grid.wires_active:
+				AudioManager.play_sfx("zap")
+				_damage_carol(WIRE_DAMAGE, "ZAP! Live wire! Carol takes %d damage." % int(WIRE_DAMAGE), carol.position)
+		"tape":
+			if not carol.rooted:
+				carol.rooted = true
+				AudioManager.play_sfx("tape")
+				_popup(carol, "STUCK!", UiKit.RED)
+				SignalBus.say("RED TAPE! Carol is stuck - no more moving this turn (she can still attack).", UiKit.RED)
 
 
 ## Called after an enemy steps (or is shoved) onto a tile: spike traps hurt monsters too.
 func enemy_stepped(e: EnemyUnit, spike_damage: float = ENEMY_SPIKE_DAMAGE) -> void:
-	if e.is_dead() or not grid.hazards.has(e.cell):
+	if e.is_dead():
 		return
-	AudioManager.play_sfx("spikes")
-	if e.visible:
-		_popup(e, "-%d" % int(spike_damage), UiKit.YELLOW)
-		SignalBus.say("%s lands on the spikes! -%d HP" % [e.display_name, int(spike_damage)], UiKit.YELLOW)
-	e.take_damage(spike_damage)
+	match grid.trap_kind(e.cell):
+		"spikes":
+			AudioManager.play_sfx("spikes")
+			if e.visible:
+				_popup(e, "-%d" % int(spike_damage), UiKit.YELLOW)
+				SignalBus.say("%s lands on the spikes! -%d HP" % [e.display_name, int(spike_damage)], UiKit.YELLOW)
+			e.take_damage(spike_damage)
+		"wire":
+			if grid.wires_active:
+				AudioManager.play_sfx("zap")
+				if e.visible:
+					_popup(e, "ZAP -%d" % int(WIRE_DAMAGE), UiKit.TEAL)
+					SignalBus.say("%s gets fried by a live wire! -%d HP" % [e.display_name, int(WIRE_DAMAGE)], UiKit.TEAL)
+				e.take_damage(WIRE_DAMAGE)
+		"tape":
+			if not e.rooted:
+				e.rooted = true
+				AudioManager.play_sfx("tape")
+				if e.visible:
+					_popup(e, "STUCK!", UiKit.YELLOW)
+					SignalBus.say("%s is tangled in red tape!" % e.display_name, UiKit.YELLOW)
 
 
 func player_attack(e: EnemyUnit) -> bool:
@@ -711,6 +806,120 @@ func player_attack(e: EnemyUnit) -> bool:
 		phase = Phase.PLAYER
 		_refresh_player_view()
 	return true
+
+
+func can_hit_espresso(c: Vector2i) -> bool:
+	var w := GameState.current_weapon()
+	return is_espresso(c) and carol.ap >= w.ap_cost and in_weapon_range(w, carol.cell, c) and (not w.is_ranged or grid.has_los(carol.cell, c))
+
+
+## Hitting an Overheated Espresso Machine with any weapon blows it up (can't miss).
+func player_attack_espresso(c: Vector2i) -> bool:
+	if phase != Phase.PLAYER or not can_hit_espresso(c):
+		if is_espresso(c) and phase == Phase.PLAYER:
+			SignalBus.say("Can't hit the espresso machine from here (range / line of sight / AP).", UiKit.RED)
+		return false
+	var w := GameState.current_weapon()
+	phase = Phase.BUSY
+	overlay.clear_all()
+	carol.ap -= w.ap_cost
+	SignalBus.ap_changed.emit(carol.ap, carol.max_ap)
+	var target_pos := grid.cell_to_world(c)
+	AudioManager.play_sfx(_weapon_sfx(w))
+	await carol.play_attack(target_pos, not w.is_ranged)
+	var dummy := Node2D.new()
+	dummy.position = target_pos
+	grid.objects.add_child(dummy)
+	await _fire(carol, dummy, w.projectile, w.projectile_tint)
+	dummy.queue_free()
+	await explode(c)
+	if phase == Phase.BUSY:
+		phase = Phase.PLAYER
+		_refresh_player_view()
+	return true
+
+
+## A monster shoots an espresso machine next to Carol.
+func enemy_shoot_espresso(e: EnemyUnit, c: Vector2i) -> void:
+	e.visible = true
+	e.revealed_until = turn_number + 1
+	SignalBus.say("%s shoots the Overheated Espresso Machine next to Carol!" % e.display_name, UiKit.PINK)
+	AudioManager.play_sfx("enemy_shoot")
+	var dummy := Node2D.new()
+	dummy.position = grid.cell_to_world(c)
+	grid.objects.add_child(dummy)
+	await _fire(e, dummy, e.data.projectile, Color.WHITE)
+	dummy.queue_free()
+	await explode(c)
+
+
+## Blows up the espresso machine at `c`: 25 damage to Carol / 32 to monsters on the 8
+## surrounding tiles, chaining into any other machine caught in the blast.
+func explode(c: Vector2i) -> void:
+	if not is_espresso(c):
+		return
+	_remove_last_blocker(c)
+	AudioManager.play_sfx("explosion")
+	shake(16.0)
+	hitstop(0.1)
+	_blast_fx(grid.cell_to_world(c))
+	SignalBus.say("KA-BREW! The espresso machine explodes!", UiKit.YELLOW)
+	var chain: Array[Vector2i] = []
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var n := c + Vector2i(dx, dy)
+			if n != c and is_espresso(n):
+				chain.append(n)
+	if maxi(absi(carol.cell.x - c.x), absi(carol.cell.y - c.y)) <= 1:
+		_damage_carol(EXPLOSION_DAMAGE, "Carol is caught in the blast! -%d HP" % int(EXPLOSION_DAMAGE), grid.cell_to_world(c))
+	for e in enemies.duplicate():
+		if e.is_dead():
+			continue
+		var near: Vector2i = e.nearest_cell(c)
+		if maxi(absi(near.x - c.x), absi(near.y - c.y)) <= 1:
+			e.visible = true
+			_popup(e, "BOOM -%d" % int(EXPLOSION_ENEMY_DAMAGE), UiKit.YELLOW)
+			e.take_damage(EXPLOSION_ENEMY_DAMAGE)
+	_update_fog()
+	for n in chain:
+		if phase != Phase.ENDED:
+			await get_tree().create_timer(0.15).timeout
+			await explode(n)
+
+
+func _blast_fx(at: Vector2) -> void:
+	var p := CPUParticles2D.new()
+	p.position = at + Vector2(0, -30)
+	p.one_shot = true
+	p.amount = 40
+	p.lifetime = 0.6
+	p.explosiveness = 0.95
+	p.spread = 180.0
+	p.initial_velocity_min = 160.0
+	p.initial_velocity_max = 380.0
+	p.gravity = Vector2(0, 300)
+	p.scale_amount_min = 6.0
+	p.scale_amount_max = 14.0
+	var g := Gradient.new()
+	g.set_color(0, Color(1.0, 0.95, 0.4))
+	g.set_color(1, Color(0.8, 0.15, 0.05, 0.0))
+	p.color_ramp = g
+	p.z_index = 4
+	grid.add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.2).timeout.connect(p.queue_free)
+	var flash := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in 16:
+		pts.append(Vector2.from_angle(TAU * i / 16.0) * Vector2(190, 95))
+	flash.polygon = pts
+	flash.color = Color(1.0, 0.85, 0.3, 0.55)
+	flash.position = at
+	flash.z_index = 3
+	grid.add_child(flash)
+	var tw := flash.create_tween()
+	tw.tween_property(flash, "modulate:a", 0.0, 0.35)
+	tw.tween_callback(flash.queue_free)
 
 
 func _weapon_sfx(w: WeaponData) -> String:
@@ -823,6 +1032,32 @@ func _popup(unit: Node2D, text: String, color: Color) -> void:
 	var lift: float = 150.0 * (unit.size_cells if unit is BattleUnit else 1)
 	var screen := get_viewport().get_canvas_transform() * (unit.position + Vector2(0, -lift))
 	hud.popup_text(screen, text, color)
+
+
+## First sighting of each monster this battle: a NEW THREAT card the first time the run
+## meets that monster type, a BOSS card for bosses, otherwise a log line.
+func _process(_delta: float) -> void:
+	if not ready_done:
+		return
+	for e in enemies:
+		if e.visible and not e.sighted and not e.is_dead():
+			e.sighted = true
+			_on_sighted(e)
+
+
+func _on_sighted(e: EnemyUnit) -> void:
+	var id := e.data.enemy_id
+	var known := GameState.bestiary.has(id)
+	if not known:
+		GameState.bestiary.append(id)
+	if e.data.is_boss:
+		AudioManager.play_sfx("new_enemy")
+		hud.show_intro_card(e, "BOSS FIGHT!")
+	elif not known:
+		AudioManager.play_sfx("new_enemy")
+		hud.show_intro_card(e, "NEW THREAT!")
+	else:
+		SignalBus.say("%s spotted!" % e.display_name, UiKit.PINK)
 
 
 ## Brief freeze-frame on big hits so they land with weight.

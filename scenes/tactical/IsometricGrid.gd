@@ -7,7 +7,11 @@ enum Cover { NONE, HALF, FULL }
 
 const CELL := Vector2i(128, 64)
 ## Cover value of each blocker kind (crates and trash cans = half, vending machines = full).
-const COVER_OF := {"crate": Cover.HALF, "trash": Cover.HALF, "vending": Cover.FULL, "cage": Cover.NONE}
+const COVER_OF := {"crate": Cover.HALF, "trash": Cover.HALF, "espresso": Cover.HALF, "vending": Cover.FULL, "cage": Cover.NONE}
+const TRAP_DECAL := preload("res://scenes/tactical/TrapDecal.gd")
+const ESPRESSO := preload("res://scenes/tactical/EspressoMachine.gd")
+## Human-readable trap names for hover text.
+const TRAP_NAMES := {"spikes": "SPIKE TRAP", "wire": "LIVE WIRE", "tape": "RED TAPE"}
 const FOG_UNEXPLORED := Vector2i(0, 0)
 const FOG_EXPLORED := Vector2i(1, 0)
 const LOS_LAYER := 1
@@ -29,8 +33,13 @@ var blockers: Dictionary = {}
 var blocker_sprites: Dictionary = {}
 ## cell -> StaticBody2D used by the LOS raycast (full cover only)
 var los_bodies: Dictionary = {}
-## cells with spike traps
+## cell -> trap kind: "spikes", "wire" (live wire, sparks on alternating turns) or "tape"
+## (red tape: roots whoever steps in it for the rest of their turn)
 var hazards: Dictionary = {}
+## cell -> TrapDecal node for wire / tape traps
+var trap_nodes: Dictionary = {}
+## Live wires spark on alternating turns (see TacticalBattlefield.start_player_turn).
+var wires_active: bool = false
 var explored: Dictionary = {}
 var visible_cells: Dictionary = {}
 
@@ -170,14 +179,49 @@ func remove_blocker(c: Vector2i) -> void:
 		los_bodies.erase(c)
 
 
-func add_hazard(c: Vector2i, tex: Texture2D) -> void:
-	hazards[c] = true
+func add_hazard(c: Vector2i, tex: Texture2D, kind: String = "spikes") -> void:
+	hazards[c] = kind
 	astar.set_point_weight_scale(c, 5.0)
-	var s := Sprite2D.new()
-	s.texture = tex
-	s.position = cell_to_world(c)
-	SpriteScaler.fit(s, Vector2(112, 84), 26.0)
-	decals.add_child(s)
+	if kind == "spikes":
+		var s := Sprite2D.new()
+		s.texture = tex
+		s.position = cell_to_world(c)
+		SpriteScaler.fit(s, Vector2(112, 84), 26.0)
+		decals.add_child(s)
+		return
+	var d: Node2D = TRAP_DECAL.new()
+	d.kind = kind
+	d.position = cell_to_world(c)
+	d.active = wires_active
+	decals.add_child(d)
+	trap_nodes[c] = d
+
+
+func trap_kind(c: Vector2i) -> String:
+	return String(hazards.get(c, ""))
+
+
+## True if stepping on `c` right now would hurt (spikes always, wires only while sparking).
+func trap_hurts(c: Vector2i) -> bool:
+	var k := trap_kind(c)
+	return k == "spikes" or (k == "wire" and wires_active)
+
+
+func set_wires_active(on: bool) -> void:
+	wires_active = on
+	for c in trap_nodes:
+		if trap_kind(c) == "wire":
+			trap_nodes[c].set_active(on)
+
+
+## Overheated Espresso Machine: a half-cover blocker that explodes when hit.
+func add_espresso(c: Vector2i) -> void:
+	add_blocker(c, "espresso", null, false)
+	var m: Sprite2D = ESPRESSO.new()
+	m.position = cell_to_world(c)
+	m.name = "espresso_%d_%d" % [c.x, c.y]
+	objects.add_child(m)
+	blocker_sprites[c] = m
 
 
 ## Flood fill over walkable cells; used to keep maps fully connected.

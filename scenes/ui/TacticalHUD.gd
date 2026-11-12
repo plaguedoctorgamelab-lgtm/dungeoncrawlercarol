@@ -19,6 +19,15 @@ var _hit_label: Label
 var _hit_target: Label
 var _info_label: Label
 var _result: PanelContainer
+var _card: PanelContainer
+var _card_portrait: TextureRect
+var _card_name: Label
+var _card_role: Label
+var _card_stats: Label
+var _card_intent: Label
+var _intro: Control
+var _intro_queue: Array = []
+var _intro_timer: SceneTreeTimer
 
 
 func _ready() -> void:
@@ -30,6 +39,7 @@ func _ready() -> void:
 	_build_top()
 	_build_bottom()
 	_build_hit_panel()
+	_build_enemy_card()
 	SignalBus.log_message.connect(add_log)
 	SignalBus.phase_changed.connect(_on_phase)
 	SignalBus.hp_changed.connect(func(_c, _m): update_all())
@@ -267,6 +277,164 @@ func _on_hit_preview(chance: float, target: String) -> void:
 	_hit_label.text = CombatMath.badge_text(chance)
 	_hit_label.add_theme_color_override("font_color", UiKit.YELLOW if chance > 0 else UiKit.RED)
 	_hit_target.text = target
+
+
+# ------------------------------------------------------------------ enemy cards
+
+func _build_enemy_card() -> void:
+	_card = PanelContainer.new()
+	_card.name = "EnemyCard"
+	_card.position = Vector2(10, 440)
+	_card.custom_minimum_size = Vector2(420, 0)
+	_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_card)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_card.add_child(row)
+	_card_portrait = UiKit.texture_rect(null, Vector2(110, 110))
+	row.add_child(_card_portrait)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 2)
+	col.custom_minimum_size = Vector2(290, 0)
+	row.add_child(col)
+	_card_name = UiKit.label("", 20, UiKit.YELLOW)
+	col.add_child(_card_name)
+	_card_role = UiKit.label("", 14, UiKit.TEAL)
+	col.add_child(_card_role)
+	_card_stats = UiKit.label("", 13)
+	_card_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_card_stats.custom_minimum_size = Vector2(290, 0)
+	col.add_child(_card_stats)
+	_card_intent = UiKit.label("", 13, UiKit.PINK)
+	_card_intent.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_card_intent.custom_minimum_size = Vector2(290, 0)
+	col.add_child(_card_intent)
+	_card.visible = false
+
+
+## Hover card: portrait, name, role, stats and next-turn intent. Pass null to hide.
+func show_enemy_card(e: EnemyUnit) -> void:
+	if e == null:
+		_card.visible = false
+		return
+	_card_portrait.texture = e.data.sprite_texture
+	_card_name.text = e.display_name.to_upper()
+	_card_role.text = e.data.role
+	_card_stats.text = e.stats_text()
+	_card_intent.text = "Next turn: " + EnemyUnit.INTENT_TEXT.get(e.intent, "?")
+	_card.visible = true
+
+
+func is_intro_showing() -> bool:
+	return _intro != null
+
+
+## Big "NEW THREAT!" / "BOSS!" card when a monster type appears for the first time.
+## Queued if one is already showing; click or press any key to dismiss (auto after 4 s).
+func show_intro_card(e: EnemyUnit, header: String) -> void:
+	_intro_queue.append([e, header])
+	if _intro == null:
+		_next_intro()
+
+
+func _next_intro() -> void:
+	if _intro_queue.is_empty():
+		return
+	var entry: Array = _intro_queue.pop_front()
+	# The monster may have died (and been freed) while its card was queued.
+	if not is_instance_valid(entry[0]):
+		_next_intro()
+		return
+	var e: EnemyUnit = entry[0]
+	var header: String = entry[1]
+	var boss := header.begins_with("BOSS")
+	var accent := UiKit.YELLOW if boss else UiKit.PINK
+	_intro = Control.new()
+	_intro.name = "IntroCard"
+	_intro.size = UiKit.DESIGN
+	_intro.mouse_filter = Control.MOUSE_FILTER_STOP
+	_intro.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventMouseButton and ev.pressed:
+			dismiss_intro())
+	root.add_child(_intro)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.45)
+	dim.size = UiKit.DESIGN
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_intro.add_child(dim)
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#120624")
+	style.border_color = accent
+	style.set_border_width_all(5)
+	style.set_corner_radius_all(18)
+	style.shadow_color = Color(accent, 0.5)
+	style.shadow_size = 18
+	style.set_content_margin_all(18)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.custom_minimum_size = Vector2(640, 0)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_intro.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(v)
+	var h := UiKit.label(header, 34, accent)
+	h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(h)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(row)
+	var pic := UiKit.texture_rect(e.data.sprite_texture, Vector2(200, 200))
+	row.add_child(pic)
+	var col := VBoxContainer.new()
+	col.custom_minimum_size = Vector2(380, 0)
+	col.add_theme_constant_override("separation", 6)
+	row.add_child(col)
+	col.add_child(UiKit.label(e.display_name.to_upper(), 30, Color.WHITE))
+	col.add_child(UiKit.label(e.data.role, 18, UiKit.TEAL))
+	var st := UiKit.label(e.stats_text(), 16, UiKit.YELLOW)
+	st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	st.custom_minimum_size = Vector2(380, 0)
+	col.add_child(st)
+	var fl := UiKit.label("\"%s\"" % e.data.flavor_text, 18, Color("#e8dcff"))
+	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fl.custom_minimum_size = Vector2(380, 0)
+	col.add_child(fl)
+	var tip := UiKit.label("click or press any key", 13, Color("#9a8cb8"))
+	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(tip)
+	# Slam in: drop from above with a squash, slight wobble.
+	panel.position = Vector2(UiKit.DESIGN.x / 2.0 - 320, -420)
+	panel.pivot_offset = Vector2(320, 150)
+	var tw := panel.create_tween()
+	tw.tween_property(panel, "position:y", 150.0, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(panel, "rotation", 0.02, 0.08)
+	tw.tween_property(panel, "rotation", 0.0, 0.1)
+	_intro_timer = get_tree().create_timer(4.0)
+	var mine := _intro
+	_intro_timer.timeout.connect(func():
+		if _intro == mine:
+			dismiss_intro())
+
+
+func dismiss_intro() -> void:
+	if _intro == null:
+		return
+	var old := _intro
+	_intro = null
+	var tw := old.create_tween()
+	tw.tween_property(old, "modulate:a", 0.0, 0.15)
+	tw.tween_callback(old.queue_free)
+	_next_intro()
+
+
+func _input(event: InputEvent) -> void:
+	if _intro != null and event is InputEventKey and event.pressed and not event.echo and event.keycode != KEY_F11:
+		dismiss_intro()
+		get_viewport().set_input_as_handled()
 
 
 func set_hover_info(text: String) -> void:

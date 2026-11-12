@@ -70,6 +70,7 @@ func notices_carol(e) -> bool:
 
 func act(e) -> void:
 	e.ap = e.max_ap
+	e.rooted = false
 	if not e.alerted:
 		if notices_carol(e):
 			e.alerted = true
@@ -101,14 +102,35 @@ func _ranged_turn(e) -> void:
 		if score > best_score:
 			best_score = score
 			best = c
+	# Drama: if Carol is standing next to an Overheated Espresso Machine this shooter can hit
+	# from where it stands (and it isn't next to the machine itself), it shoots the machine.
+	var boom := _espresso_near_carol(e)
+	if boom.x >= 0:
+		await battle.enemy_shoot_espresso(e, boom)
+		return
 	if best.x >= 0:
 		await _walk(e, grid.path_from_plan(plan, e.cell, best))
-		if battle.carol.is_dead() or battle.is_ended():
+		if battle.carol.is_dead() or battle.is_ended() or e.is_dead():
 			return
-		await battle.enemy_attack(e)
+		if can_attack_from(e, e.cell, battle.carol.cell):
+			await battle.enemy_attack(e)
 		return
 	# No shot this turn: advance toward Carol, preferring a covered tile to end on.
 	await _advance(e, true)
+
+
+func _espresso_near_carol(e) -> Vector2i:
+	var carol_cell: Vector2i = battle.carol.cell
+	for c in grid.blockers:
+		if grid.blockers[c] != "espresso":
+			continue
+		if maxi(absi(c.x - carol_cell.x), absi(c.y - carol_cell.y)) != 1:
+			continue
+		if maxi(absi(c.x - e.cell.x), absi(c.y - e.cell.y)) <= 1:
+			continue
+		if CombatMath.distance(e.cell, c) <= e.data.attack_range_tiles + 0.01 and grid.has_los(e.cell, c):
+			return c
+	return Vector2i(-1, -1)
 
 
 func _melee_turn(e) -> void:
@@ -125,7 +147,7 @@ func _melee_turn(e) -> void:
 			best = c
 	if best.x >= 0:
 		await _walk(e, grid.path_from_plan(plan, e.cell, best))
-		if not battle.carol.is_dead() and not battle.is_ended():
+		if not battle.carol.is_dead() and not battle.is_ended() and not e.is_dead() and can_attack_from(e, e.cell, battle.carol.cell):
 			await battle.enemy_attack(e)
 		return
 	await _advance(e, false)
@@ -161,7 +183,7 @@ func _walk(e, path: Array[Vector2i]) -> void:
 		await e.step_to(next, grid.cell_to_world(next), seen)
 		e.visible = battle.is_enemy_targetable(e)
 		await battle.enemy_stepped(e)
-		if e.is_dead():
+		if e.is_dead() or e.rooted:
 			return
 
 

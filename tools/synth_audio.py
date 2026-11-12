@@ -222,6 +222,31 @@ def make_sfx():
         tone(o, 0.05 + i * 0.07, 0.25, midi_hz(m), None, "sine", 0.18, release=0.2)
     fx["cage_break"] = o
 
+    # v0.4 traps and drama.
+    o = buf(0.4)
+    r = random.Random(21)
+    for i in range(10):
+        f = r.uniform(1500, 3200)
+        tone(o, i * 0.035, 0.03, f, f * 0.6, "square", 0.25, duty=0.15, release=0.01)
+    noise(o, 0, 0.35, 0.35, decay=9, lowpass=1.0)
+    tone(o, 0, 0.35, 60, 60, "saw", 0.15, vibrato=0.3, vib_rate=50)
+    fx["zap"] = o
+
+    o = buf(0.35); tone(o, 0, 0.3, 260, 140, "square", 0.25, duty=0.4, vibrato=0.04, vib_rate=9); noise(o, 0, 0.2, 0.25, decay=14, lowpass=0.2)
+    fx["tape"] = o
+
+    o = buf(1.1); noise(o, 0, 1.0, 0.9, decay=4, lowpass=0.35); kick(o, 0, 1.0); tone(o, 0, 0.5, 120, 30, "square", 0.3)
+    noise(o, 0.05, 0.6, 0.3, decay=6, lowpass=0.9)
+    fx["explosion"] = o
+
+    o = buf(0.9)
+    for i, m in enumerate([60, 63, 66, 69]):
+        tone(o, i * 0.07, 0.12, midi_hz(m), None, "square", 0.22, duty=0.5)
+    tone(o, 0.3, 0.55, midi_hz(72), midi_hz(71), "saw", 0.22, vibrato=0.02, release=0.2)
+    tone(o, 0.3, 0.55, midi_hz(48), None, "tri", 0.3, release=0.2)
+    noise(o, 0.3, 0.2, 0.3, decay=12)
+    fx["new_enemy"] = o
+
     for name, o in fx.items():
         write(os.path.join(SFX_DIR, name + ".wav"), o)
     return list(fx)

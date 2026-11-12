@@ -14,6 +14,8 @@ const SWIPE_COLORS := [Color("#ff2bd6"), Color("#00f0ff"), Color("#ffe600")]
 
 ## Set by Dash: the next enemy attack on Carol gets -25% to hit.
 var evasive: bool = false
+## Stuck in red tape: no more moving this turn.
+var rooted: bool = false
 ## "" while idling; otherwise the name of the one-shot animation that's playing.
 var anim: String = ""
 
