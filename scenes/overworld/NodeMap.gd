@@ -22,9 +22,12 @@ var _save_btn: Button
 
 func _ready() -> void:
 	theme = UiKit.theme()
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiKit.fit_design(self)
 	if GameState.map_data.is_empty():
 		GameState.new_run(GameState.difficulty)
+	# Level-start auto-save (every difficulty; Easy/Medium also auto-save at each room).
+	if GameState.at_realm_start():
+		GameState.autosave(true)
 	_build_ui()
 	refresh()
 	if GameState.overworld_banner != "":
@@ -44,7 +47,7 @@ func _build_ui() -> void:
 	portrait.position = Vector2(1180, 8)
 	add_child(portrait)
 	var stat_box := VBoxContainer.new()
-	stat_box.position = Vector2(860, 12)
+	stat_box.position = Vector2(820, 12)
 	stat_box.custom_minimum_size = Vector2(310, 0)
 	add_child(stat_box)
 	_hp_bar = ProgressBar.new()
@@ -158,7 +161,7 @@ func choose_node(id: int) -> void:
 	match GameState.node_type(id):
 		"combat", "boss":
 			GameState.pending_node = id
-			get_tree().change_scene_to_file("res://scenes/tactical/TacticalBattle.tscn")
+			get_tree().change_scene_to_file("res://scenes/tactical/TacticalBattlefield.tscn")
 		"hazard":
 			_resolve_hazard(id)
 		"supply":
@@ -215,7 +218,7 @@ func _resolve_supply(id: int) -> void:
 		icon = data.icon
 	else:
 		GameState.energy_drinks += 1
-		text = "A RADICAL Energy Drink! Heals %d HP for 1 AP." % int(GameState.DRINK_HEAL)
+		text = "A RADICAL Energy Drink! Heals %d HP for %d AP." % [int(GameState.DRINK_HEAL), GameState.DRINK_AP]
 		icon = UiKit.sprite("item_energy_drink")
 	refresh()
 	_show_popup("SUPPLY CACHE", text, icon)

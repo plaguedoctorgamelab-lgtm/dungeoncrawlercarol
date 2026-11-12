@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ProjectileData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ProjectileData.gd" id="1_mc0jt"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_megaphone_wave.png" id="2_7e7nd"]
+
+[resource]
+script = ExtResource("1_mc0jt")
+projectile_id = "proj_megaphone_wave"
+display_name = "Megaphone Shout"
+texture = ExtResource("2_7e7nd")
+speed = 1000.0
+motion = "wobble"
+trail_color = Color(1, 1, 0.4, 0.3)
+description = "MA'AM. This is a PRIVATE sidewalk."

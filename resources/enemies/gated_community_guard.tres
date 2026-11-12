@@ -1,17 +1,19 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_megaphone_wave.png" id="1_fnrmj"]
-[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_f3gs1"]
-[ext_resource type="Texture2D" path="res://assets/sprites/gated_community_guard.png" id="3_fkoea"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_megaphone_wave.tres" id="1_f3gs1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_megaphone_wave.png" id="2_fkoea"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="3_e8q2w"]
+[ext_resource type="Texture2D" path="res://assets/sprites/gated_community_guard.png" id="4_qg6nu"]
 
 [resource]
-script = ExtResource("2_f3gs1")
+script = ExtResource("3_e8q2w")
 enemy_id = "gated_community_guard"
 display_name = "Mall Cop Mercenary"
 sight_radius_tiles = 8
 is_ranged = true
-projectile_texture = ExtResource("1_fnrmj")
-sprite_texture = ExtResource("3_fkoea")
+projectile_texture = ExtResource("2_fkoea")
+projectile = ExtResource("1_f3gs1")
+sprite_texture = ExtResource("4_qg6nu")
 role = "Ranged Shooter"
 attack_range_tiles = 5
 flavor_text = "Ma'am. MA'AM. This is a private sidewalk."

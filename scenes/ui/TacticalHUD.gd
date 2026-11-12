@@ -21,7 +21,7 @@ var _result: PanelContainer
 func _ready() -> void:
 	root = Control.new()
 	root.theme = UiKit.theme()
-	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiKit.fit_design(root)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	_build_top()
@@ -105,8 +105,8 @@ func _build_bottom() -> void:
 	_end_btn.custom_minimum_size = Vector2(170, 52)
 	_end_btn.pressed.connect(_on_end_turn)
 	root.add_child(_end_btn)
-	var help := UiKit.label("Click tile: move (1 AP)\nClick enemy: attack\n1-4 weapon  H drink", 12, Color("#bfaee6"))
-	help.position = Vector2(1130, 636)
+	var help := UiKit.label("Tile: move 1 AP\nEnemy: attack 2 AP\n1-4 weapon  H drink\nF11 fullscreen", 11, Color("#bfaee6"))
+	help.position = Vector2(1130, 632)
 	root.add_child(help)
 
 
@@ -121,11 +121,29 @@ func _build_hit_panel() -> void:
 	_hit_panel.add_child(box)
 	var row := HBoxContainer.new()
 	box.add_child(row)
-	var badge_label := UiKit.label("HIT CHANCE", 14, UiKit.TEAL)
-	badge_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(badge_label)
+	# Floating neon badge ("85% HIT"). Drawn as a styled panel because the
+	# ui_hit_chance_badge art has a fixed number baked into it.
+	var badge := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#0b0418")
+	style.border_color = UiKit.PINK
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(14)
+	style.shadow_color = Color(1.0, 0.17, 0.84, 0.45)
+	style.shadow_size = 8
+	style.set_content_margin_all(4)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	badge.add_theme_stylebox_override("panel", style)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(badge)
 	_hit_label = UiKit.label("", 26, UiKit.YELLOW)
-	row.add_child(_hit_label)
+	_hit_label.add_theme_constant_override("outline_size", 8)
+	_hit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_child(_hit_label)
+	var tip := UiKit.label("open 85%\nhalf cover 60%\nfull cover 35%", 11, Color("#bfaee6"))
+	tip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(tip)
 	_hit_target = UiKit.label("", 14)
 	box.add_child(_hit_target)
 	_info_label = UiKit.label("", 13, Color("#d8c8ff"))
@@ -194,7 +212,7 @@ func update_all() -> void:
 		var b: Button = _weapon_row.get_child(i)
 		b.set_pressed_no_signal(GameState.weapons[i] == GameState.equipped_weapon)
 	var player_turn: bool = battle.is_player_phase()
-	_drink_btn.text = "Drink x%d\n+%d HP, 1 AP" % [GameState.energy_drinks, int(GameState.DRINK_HEAL)]
+	_drink_btn.text = "Drink x%d\n+%d HP, %d AP" % [GameState.energy_drinks, int(GameState.DRINK_HEAL), GameState.DRINK_AP]
 	_drink_btn.disabled = not player_turn or GameState.energy_drinks <= 0
 	_end_btn.disabled = not player_turn
 
@@ -214,7 +232,7 @@ func _on_hit_preview(chance: float, target: String) -> void:
 		_hit_panel.visible = _info_label.text != ""
 		return
 	_hit_panel.visible = true
-	_hit_label.text = " %d%%" % int(round(chance * 100))
+	_hit_label.text = CombatMath.badge_text(chance)
 	_hit_label.add_theme_color_override("font_color", UiKit.YELLOW if chance > 0 else UiKit.RED)
 	_hit_target.text = target
 
@@ -235,6 +253,8 @@ func add_log(text: String, color: Color = Color.WHITE) -> void:
 
 
 func popup_text(screen_pos: Vector2, text: String, color: Color) -> void:
+	# Convert from viewport pixels into the HUD's 1280x720 design grid.
+	screen_pos = screen_pos / root.scale
 	var l := UiKit.label(text, 26, color)
 	l.position = screen_pos - Vector2(30, 0)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE

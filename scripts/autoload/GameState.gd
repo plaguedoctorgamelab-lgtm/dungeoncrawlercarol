@@ -4,23 +4,25 @@ extends Node
 enum Difficulty { EASY, MEDIUM, HARD, EXTREME }
 
 const DIFFICULTY_NAMES: Array[String] = ["Easy", "Medium", "Hard", "EXTREME!!!!!!"]
-## GDD 4.6 difficulty matrix.
+## V2 difficulty matrix. "save" = when the game auto-saves: "room" (start of every room) or "level".
 const DIFFICULTY_TABLE: Array[Dictionary] = [
-	{"hp": 0.8, "dmg": 0.8, "sight": 8, "save": "node", "permadeath": false},
-	{"hp": 1.0, "dmg": 1.0, "sight": 6, "save": "node", "permadeath": false},
-	{"hp": 1.25, "dmg": 1.25, "sight": 5, "save": "realm", "permadeath": false},
-	{"hp": 1.5, "dmg": 1.5, "sight": 4, "save": "realm", "permadeath": true},
+	{"hp": 0.8, "dmg": 0.8, "sight": 8, "save": "room", "permadeath": false},
+	{"hp": 1.0, "dmg": 1.0, "sight": 6, "save": "room", "permadeath": false},
+	{"hp": 1.3, "dmg": 1.3, "sight": 5, "save": "level", "permadeath": false},
+	{"hp": 1.6, "dmg": 1.6, "sight": 3, "save": "level", "permadeath": true},
 ]
 const DIFFICULTY_BLURBS: Array[String] = [
-	"Enemies x0.8 HP/DMG. Sight 8 tiles. Save at every node.",
-	"Enemies x1.0 HP/DMG. Sight 6 tiles. Save at every node.",
-	"Enemies x1.25 HP/DMG. Sight 5 tiles. Save only at the start of each realm.",
-	"Enemies x1.5 HP/DMG. Sight 4 tiles. FULL PERMADEATH: dying wipes your save and resets to Level 1.",
+	"Enemies x0.8 HP/DMG. Wide sight (8 tiles). Auto-saves at the start of every room.",
+	"Enemies x1.0 HP/DMG. Standard sight (6 tiles). Auto-saves at the start of every room.",
+	"Enemies x1.3 HP/DMG. Reduced sight (5 tiles). Auto-saves only at the start of each level.",
+	"Enemies x1.6 HP/DMG. Tight fog (3 tiles). FULL PERMADEATH: dying deletes your save and resets to Level 1.",
 ]
 
 const CAROL_MAX_HP := 100.0
 const CAROL_AP := 4
 const DRINK_HEAL := 35.0
+## Consumables / specials cost 2-3 AP (V2 spec). The Energy Drink costs 2.
+const DRINK_AP := 2
 const VICTORY_HEAL := 15.0
 const REALM_COUNT := 4
 
@@ -44,6 +46,8 @@ var enemies_defeated: int = 0
 var run_seed: int = 0
 ## One-shot banner shown when the overworld opens.
 var overworld_banner: String = ""
+## Weapon handed out by start_realm (shown in the realm banner).
+var realm_gift: String = ""
 
 var rng := RandomNumberGenerator.new()
 
@@ -53,6 +57,21 @@ var _enemy_cache: Dictionary = {}
 
 func _ready() -> void:
 	rng.randomize()
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+
+## F11 toggles fullscreen / windowed from any screen.
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
+		toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+
+
+func toggle_fullscreen() -> void:
+	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 
 func new_run(diff: int, seed_value: int = -1) -> void:
@@ -76,6 +95,10 @@ func start_realm(index: int) -> void:
 	pending_node = -1
 	visited.clear()
 	map_data = OverworldGenerator.generate(run_seed + index * 7919, index)
+	# The Super Soaker 9000 is guaranteed before the Fire level starts.
+	realm_gift = ""
+	if index >= Roster.SOAKER_REALM and give_weapon("super_soaker"):
+		realm_gift = "Found the SUPER SOAKER 9000 high-damage water blaster!"
 
 
 ## True when the player is standing at the very start of a realm map.
@@ -108,20 +131,30 @@ func carol_damage_mult() -> float:
 	return 1.0 + 0.2 * realm
 
 
+## Manual saves follow the same rule as auto-saves.
 func can_save_now() -> bool:
-	if diff()["save"] == "node":
+	if diff()["save"] == "room":
 		return true
 	return at_realm_start()
 
 
 func save_rule_text() -> String:
-	match String(diff()["save"]):
-		"node":
-			return "Saving allowed at the start of every node."
-		_:
-			if is_permadeath():
-				return "Saving only at realm start. PERMADEATH is on."
-			return "Saving only at the start of each realm."
+	if diff()["save"] == "room":
+		return "Auto-saves at the start of every room."
+	if is_permadeath():
+		return "Auto-saves only at level start. PERMADEATH is on."
+	return "Auto-saves only at the start of each level."
+
+
+## Called when a room starts and when a level starts. Writes the active slot when the
+## difficulty allows it. Returns true if a save was written.
+func autosave(at_level_start: bool) -> bool:
+	if map_data.is_empty():
+		return false
+	if diff()["save"] == "level" and not at_level_start:
+		return false
+	var mgr := get_node_or_null("/root/SaveManager")
+	return mgr != null and mgr.save_game(active_slot)
 
 
 # ---------------------------------------------------------------- data access

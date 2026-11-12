@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ProjectileData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ProjectileData.gd" id="1_yw067"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_ad_popup.png" id="2_cs26m"]
+
+[resource]
+script = ExtResource("1_yw067")
+projectile_id = "proj_ad_popup"
+display_name = "Spam Pop-Up Ad"
+texture = ExtResource("2_cs26m")
+speed = 950.0
+motion = "wobble"
+trail_color = Color(1, 0.4, 0.4, 0.35)
+description = "You are the 1,000,000th visitor!"

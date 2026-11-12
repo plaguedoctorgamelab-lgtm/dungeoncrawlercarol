@@ -1,19 +1,21 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_dollar_lure.png" id="1_w0rty"]
-[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_nfk3k"]
-[ext_resource type="Texture2D" path="res://assets/sprites/deep_sea_lobbyist.png" id="3_o7heo"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_dollar_lure.tres" id="1_nfk3k"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_dollar_lure.png" id="2_o7heo"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="3_waq1t"]
+[ext_resource type="Texture2D" path="res://assets/sprites/deep_sea_lobbyist.png" id="4_gu8yr"]
 
 [resource]
-script = ExtResource("2_nfk3k")
+script = ExtResource("3_waq1t")
 enemy_id = "deep_sea_lobbyist"
 display_name = "Anglerfish Lobbyist"
 max_hp = 60.0
 base_damage = 22.0
 sight_radius_tiles = 8
 is_ranged = true
-projectile_texture = ExtResource("1_w0rty")
-sprite_texture = ExtResource("3_o7heo")
+projectile_texture = ExtResource("2_o7heo")
+projectile = ExtResource("1_nfk3k")
+sprite_texture = ExtResource("4_gu8yr")
 role = "Ranged / Lure"
 realm = 3
 attack_range_tiles = 5

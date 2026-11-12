@@ -1,9 +1,13 @@
 class_name IsometricGrid
 extends Node2D
-## Isometric battlefield: TileMapLayer floor, AStarGrid2D pathing, RayCast2D line of sight,
-## and a fog-of-war TileMapLayer.
+## Isometric battlefield: 128x64 TileMapLayer floor, AStarGrid2D pathing, RayCast2D line of
+## sight, XCOM-style cover, and a fog-of-war TileMapLayer.
 
-const CELL := Vector2i(32, 16)
+enum Cover { NONE, HALF, FULL }
+
+const CELL := Vector2i(128, 64)
+## Cover value of each blocker kind (crates and trash cans = half, vending machines = full).
+const COVER_OF := {"crate": Cover.HALF, "trash": Cover.HALF, "vending": Cover.FULL, "cage": Cover.NONE}
 const FOG_UNEXPLORED := Vector2i(0, 0)
 const FOG_EXPLORED := Vector2i(1, 0)
 const LOS_LAYER := 1
@@ -23,6 +27,8 @@ var astar := AStarGrid2D.new()
 var blockers: Dictionary = {}
 ## cell -> Sprite2D for cover objects
 var blocker_sprites: Dictionary = {}
+## cell -> StaticBody2D used by the LOS raycast (full cover only)
+var los_bodies: Dictionary = {}
 ## cells with spike traps
 var hazards: Dictionary = {}
 var explored: Dictionary = {}
@@ -133,7 +139,7 @@ func add_blocker(c: Vector2i, kind: String, tex: Texture2D, blocks_los: bool) ->
 		var s := Sprite2D.new()
 		s.texture = tex
 		s.position = cell_to_world(c)
-		s.offset = Vector2(0, -tex.get_height() / 2.0 + 4)
+		SpriteScaler.fit(s, SpriteScaler.COVER_FULL if kind == "vending" else SpriteScaler.COVER_HALF, 14.0)
 		s.name = "%s_%d_%d" % [kind, c.x, c.y]
 		objects.add_child(s)
 		blocker_sprites[c] = s
@@ -143,9 +149,12 @@ func add_blocker(c: Vector2i, kind: String, tex: Texture2D, blocks_los: bool) ->
 		body.collision_mask = 0
 		body.position = cell_to_world(c)
 		var poly := CollisionPolygon2D.new()
-		poly.polygon = PackedVector2Array([Vector2(0, -7), Vector2(14, 0), Vector2(0, 7), Vector2(-14, 0)])
+		var hx := CELL.x * 0.44
+		var hy := CELL.y * 0.44
+		poly.polygon = PackedVector2Array([Vector2(0, -hy), Vector2(hx, 0), Vector2(0, hy), Vector2(-hx, 0)])
 		body.add_child(poly)
 		add_child(body)
+		los_bodies[c] = body
 
 
 func remove_blocker(c: Vector2i) -> void:
@@ -154,6 +163,11 @@ func remove_blocker(c: Vector2i) -> void:
 	if blocker_sprites.has(c):
 		blocker_sprites[c].queue_free()
 		blocker_sprites.erase(c)
+	if los_bodies.has(c):
+		var body: StaticBody2D = los_bodies[c]
+		body.collision_layer = 0
+		body.queue_free()
+		los_bodies.erase(c)
 
 
 func add_hazard(c: Vector2i, tex: Texture2D) -> void:
@@ -162,7 +176,7 @@ func add_hazard(c: Vector2i, tex: Texture2D) -> void:
 	var s := Sprite2D.new()
 	s.texture = tex
 	s.position = cell_to_world(c)
-	s.offset = Vector2(0, -tex.get_height() / 2.0 + 8)
+	SpriteScaler.fit(s, Vector2(112, 84), 26.0)
 	decals.add_child(s)
 
 
@@ -221,14 +235,37 @@ func reachable(from: Vector2i, max_steps: int, occupied: Array[Vector2i]) -> Dic
 
 # ------------------------------------------------------------------ line of sight
 
-## Casts a RayCast2D from tile center to tile center; LOS blockers are StaticBody2D diamonds.
+## Casts a RayCast2D from tile center to tile center; full-cover blockers are StaticBody2D
+## diamonds. Cover hugging either end of the shot does not block it (it gives cover instead).
 func has_los(a: Vector2i, b: Vector2i) -> bool:
 	if a == b:
 		return true
+	los_ray.clear_exceptions()
+	for end in [a, b]:
+		for n in neighbors(end):
+			if los_bodies.has(n):
+				los_ray.add_exception(los_bodies[n])
 	los_ray.position = cell_to_world(a)
 	los_ray.target_position = cell_to_world(b) - los_ray.position
 	los_ray.force_raycast_update()
-	return not los_ray.is_colliding()
+	var blocked := los_ray.is_colliding()
+	los_ray.clear_exceptions()
+	return not blocked
+
+
+## Best cover the target cell gets against a shot from `attacker` (XCOM rule: a cover object
+## on a tile next to the target, on the side facing the attacker).
+func cover_between(attacker: Vector2i, target: Vector2i) -> int:
+	var best: int = Cover.NONE
+	var to_attacker := Vector2(attacker - target)
+	for n in neighbors(target):
+		if not blockers.has(n):
+			continue
+		var side := Vector2(n - target)
+		if side.dot(to_attacker) <= 0.0:
+			continue
+		best = maxi(best, int(COVER_OF.get(blockers[n], Cover.NONE)))
+	return best
 
 
 # ------------------------------------------------------------------ fog of war

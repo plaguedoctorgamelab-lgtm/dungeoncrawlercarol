@@ -47,9 +47,34 @@ The evil Sea Lord has kidnapped Princess Penny—a badass barista princess with 
 
 ## 4. Tactical Combat Mechanics, Math Formulas & Projectiles
 
+### 4.0 V2 HD Display Spec (1920x1080 Fullscreen)
+The V1 32x16 grid rendered too small on modern monitors. V2 renders everything at Full HD:
+
+| Setting | Value |
+| :--- | :--- |
+| Viewport | `1920 x 1080`, `display/window/size/mode = 3` (fullscreen on boot) |
+| Stretch | `canvas_items`, aspect `keep` |
+| Texture filter | `Linear` (`default_texture_filter = 1`) for crisp high-res cartoon art |
+| Fullscreen toggle | `F11` (handled in `GameState.gd`, `DisplayServer.window_set_mode()`) |
+| UI | Laid out on a 1280x720 design grid and scaled x1.5; MSDF fonts keep text sharp |
+
+**Battlefield footprints** (applied by `scripts/util/SpriteScaler.gd`, which reads each texture's size and scales it uniformly, bottom-center anchored to the tile center):
+
+| Entity | On-screen footprint |
+| :--- | :--- |
+| Carol, Princess Penny, regular enemies (1x1 tile) | `128 x 128 px` |
+| Level bosses (2x2 tiles) | `256 x 256 px` |
+| Half cover (crates) | `128 x 128 px` |
+| Full cover (vending machines) | `128 x 192 px` |
+| Projectiles and pickup drops | `56 x 56 px` |
+
+Missing PNGs fall back to procedural placeholder textures, so the project always boots with zero missing-resource errors.
+
 ### 4.1 Grid & Projection Specs
-* **Tile Grid:** Isometric projection using Godot 4 `TileMapLayer` ($32 \times 16$ px cell dimensions or scaled equivalent).
-* **Texture Filtering:** Set project texture filter to **Nearest Neighbor** for sharp 16-bit pixel rendering.
+* **Tile Grid:** Isometric `TileMapLayer` (`TILE_SHAPE_ISOMETRIC`, diamond-down layout) with **`tile_size = Vector2i(128, 64)`**.
+* **Room size:** `10x10` to `12x12` tiles (boss rooms `12x12`). The whole room fits the centre of the 1920x1080 screen under a **fixed, non-moving `Camera2D`** at zoom 1, with margins for the HUD bars.
+* **Depth sorting:** `y_sort_enabled = true` on the battlefield root and on the Objects layer, so units, cover props and projectiles sort correctly in 2.5D.
+* **Texture Filtering:** Linear (V2). The V1 Nearest Neighbor setting was for 32x32 pixel sprites.
 * **Fog of War:** Tiles outside Carol's vision radius are shrouded in darkness. Enemies remain invisible until entering Carol's sight radius.
 
 ### 4.2 Turn Economy & Action Point (AP) Pool
@@ -59,17 +84,24 @@ Carol and enemies operate on a **4 AP Pool per turn**:
 | :--- | :--- | :--- |
 | **Grid Movement** | `1 AP` / tile | Moves unit 1 tile along calculated `AStarGrid2D` path. |
 | **Melee Attack (Star-Sword)** | `2 AP` | Strikes an adjacent grid tile. |
-| **Ranged Weapon Attack** | `2 AP` to `3 AP` | Spawns a projectile directed at a target grid coordinate. |
-| **Consumable / Energy Drink** | `1 AP` | Restores HP or adds temporary bonus AP. |
+| **Ranged Weapon Attack** | `2 AP` | Spawns a tweened projectile directed at a target grid coordinate. |
+| **Special / Consumable (Radical Energy Drink)** | `2 AP` (specials `2-3 AP`) | Restores 35 HP. |
 
 ### 4.3 Accuracy & Line of Sight (LOS) Formulas
-Hit accuracy is probability-based, determined by unit range and raycast obstruction:
+V2 uses XCOM-style cover. The hit chance depends on the cover the target has against the attacker:
 
-$$HitChance = \max(30\%, BaseAccuracy - (Distance \times 5\%))$$
+| Target's cover | Hit chance |
+| :--- | :--- |
+| Open ground (no cover) | `85%` |
+| Half cover (crates, trash cans) | `60%` (-25%) |
+| Full cover (vending machines, walls) | `35%` (-50%) |
+| No line of sight | `0%` (can't shoot) |
 
-* **Base Melee Accuracy:** $95\%$
-* **Base Ranged Accuracy:** $85\%$
-* **Line of Sight (LOS):** Casts a `RayCast2D` from center-of-tile to center-of-tile. If intercepted by solid wall geometry, $HitChance = 0\%$.
+* **Cover rule:** a cover object on a tile next to the target, on the side facing the attacker. Cover on the far side does nothing (flanking).
+* **Line of Sight (LOS):** Casts a `RayCast2D` from center-of-tile to center-of-tile against full-cover blockers. Cover hugging the shooter or the target gives cover instead of blocking the shot.
+* **Melee** hits an adjacent tile and ignores cover (85%).
+* **HUD badge:** hovering an enemy shows a floating neon badge (`85% HIT`, `60% HIT`, `35% HIT`).
+* Enemies use the same rules against Carol.
 
 ### 4.4 Projectile & Visual Attack Effect System
 When a ranged attack is executed, a static `Sprite2D` projectile travels along a linear path from the attacker to the target cell at a fixed speed of $400.0$ pixels/second before triggering damage resolution.
@@ -127,10 +159,10 @@ When a ranged attack is executed, a static `Sprite2D` projectile travels along a
 
 | Difficulty Tier | Enemy HP Scaling | Enemy DMG Scaling | Fog of War Sight Radius | Save & Permadeath Rule |
 | :--- | :--- | :--- | :--- | :--- |
-| **Easy** | $0.8\times$ | $0.8\times$ | `8 tiles` | Save game allowed at start of every node. |
-| **Medium** | $1.0\times$ | $1.0\times$ | `6 tiles` | Save game allowed at start of every node. |
-| **Hard** | $1.25\times$ | $1.25\times$ | `5 tiles` | Save game allowed at start of each realm level. |
-| **EXTREME!!!!!!** | $1.5\times$ | $1.5\times$ | `4 tiles` | **FULL PERMADEATH:** Player death wipes save file and resets run to Level 1. |
+| **Easy** | $0.8\times$ | $0.8\times$ | `8 tiles` (wide) | Auto-save at the start of every room. |
+| **Medium** | $1.0\times$ | $1.0\times$ | `6 tiles` (standard) | Auto-save at the start of every room. |
+| **Hard** | $1.3\times$ | $1.3\times$ | `5 tiles` (reduced) | Auto-save only at level start. |
+| **EXTREME!!!!!!** | $1.6\times$ | $1.6\times$ | `3 tiles` (tight) | **FULL PERMADEATH:** Player death deletes the run save and resets to Level 1. |
 
 ---
 
@@ -169,6 +201,24 @@ extends Resource
 
 ---
 
+### 5.3 `ProjectileData.gd` (`Resource`) - V2
+```gdscript
+class_name ProjectileData
+extends Resource
+
+@export var projectile_id: String = ""
+@export var display_name: String = ""
+@export var texture: Texture2D
+@export var speed: float = 1100.0          # px/s in isometric screen space
+@export_enum("straight", "arc", "spin", "wobble", "beam") var motion: String = "straight"
+@export var arc_height: float = 0.0        # lob height for "arc"
+@export var spin_turns: float = 0.0        # turns per second
+@export var tint: Color = Color.WHITE
+@export var trail_color: Color = Color(1, 1, 1, 0)  # afterimage trail (alpha 0 = none)
+@export var footprint: Vector2 = Vector2(56, 56)
+```
+`WeaponData` and `EnemyData` each reference a `ProjectileData` (`projectile`). There are 15 tweened projectiles / attack effects in `resources/projectiles/`: Neon Star Slash, Super Soaker Water Jet, Steel Nail, Megaphone Shout, Flying Tax Receipt, Crypto Coin, Drop-Shipped Box, Spam Pop-Up Ad, Vape Ring, Bug Report, Flaming Pie Chart, Pink Slip Eviction Notice, Sea Water Squirt, Dollar Lure and the CEO Trident Beam.
+
 ## 6. Technical Architecture & Godot Scene Hierarchy
 
 ### Directory Layout
@@ -177,13 +227,13 @@ res://
 ├── assets/
 │   └── sprites/               -> Isometric 2.5D Pixel Art PNGs
 ├── scenes/
-│   ├── overworld/             -> OverworldMap.tscn, NodeButton.tscn
-│   ├── tactical/              -> TacticalBattle.tscn, IsometricGrid.gd, Projectile.tscn
+│   ├── overworld/             -> NodeMap.tscn, NodeButton.tscn
+│   ├── tactical/              -> TacticalBattlefield.tscn, IsometricGrid.gd, Projectile.tscn
 │   ├── units/                 -> CarolUnit.tscn, EnemyUnit.tscn, PrincessPenny.tscn
 │   ├── items/                 -> TacticalDrop.tscn
 │   └── ui/                    -> TitleScreen.tscn, TacticalHUD.tscn, SaveMenu.tscn, VictoryScreen.tscn
 ├── scripts/
-│   ├── autoload/              -> GameState.gd, SignalBus.gd, SaveSystem.gd
+│   ├── autoload/              -> GameState.gd, SignalBus.gd, SaveManager.gd
 │   └── resources/             -> WeaponData.gd, EnemyData.gd
 └── resources/
     ├── weapons/               -> NeonSword.tres, SuperSoaker.tres, SqueakHammer.tres
@@ -196,7 +246,7 @@ res://
 
 ### Phase 1: Overworld & Tactical Grid Core (Milestone 1)
 - [ ] Implement `TitleScreen.tscn` featuring 4 difficulty selectors and Save/Load slot handlers.
-- [ ] Build `OverworldMap.tscn` procedural node tree generator (15–20 branching nodes per realm).
+- [ ] Build `NodeMap.tscn` procedural node tree generator (15–20 branching nodes per realm).
 - [ ] Construct `IsometricGrid.gd` with Godot 4 `TileMapLayer` and `AStarGrid2D` pathfinding.
 - [ ] Implement Carol's 4 AP turn pool and grid movement logic.
 

@@ -48,10 +48,10 @@ func _ready() -> void:
 func _refresh() -> void:
 	for c in _rows.get_children():
 		c.queue_free()
-	for slot in range(1, SaveSystem.SLOT_COUNT + 1):
+	for slot in range(1, SaveManager.SLOT_COUNT + 1):
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
-		var l := UiKit.label(SaveSystem.slot_summary(slot), 15)
+		var l := UiKit.label(SaveManager.slot_summary(slot), 15)
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(l)
 		if allow_save:
@@ -60,14 +60,14 @@ func _refresh() -> void:
 			s.pressed.connect(_save.bind(slot))
 			row.add_child(s)
 		var ld := UiKit.button("LOAD", 90)
-		ld.disabled = not SaveSystem.has_save(slot)
+		ld.disabled = not SaveManager.has_save(slot)
 		ld.pressed.connect(_load.bind(slot))
 		row.add_child(ld)
 		_rows.add_child(row)
 
 
 func _save(slot: int) -> void:
-	if SaveSystem.save_game(slot):
+	if SaveManager.save_game(slot):
 		_status.text = "Saved to slot %d. Totally tubular." % slot
 	else:
 		_status.text = "Save failed!"
@@ -75,10 +75,10 @@ func _save(slot: int) -> void:
 
 
 func _load(slot: int) -> void:
-	if SaveSystem.load_game(slot):
+	if SaveManager.load_game(slot):
 		loaded.emit()
 		GameState.overworld_banner = "Loaded slot %d - %s" % [slot, Roster.REALM_NAMES[GameState.realm]]
-		get_tree().change_scene_to_file("res://scenes/overworld/OverworldMap.tscn")
+		get_tree().change_scene_to_file("res://scenes/overworld/NodeMap.tscn")
 	else:
 		_status.text = "That slot is empty or corrupt."
 

@@ -9,6 +9,8 @@ extends Resource
 @export var is_ranged: bool = false
 @export var max_range_tiles: int = 1
 @export var projectile_texture: Texture2D
+## V2 tweened projectile / attack effect.
+@export var projectile: ProjectileData
 @export var icon: Texture2D
 
 @export_group("Extras")

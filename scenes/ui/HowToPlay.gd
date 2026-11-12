@@ -4,15 +4,15 @@ extends Control
 const SECTIONS: Array[Array] = [
 	["THE MISSION", "The Sea Lord kidnapped Princess Penny to power his corporate espresso machine. Fight through 4 realms (Earth, Air, Fire, Water) and break her out of his underwater boardroom."],
 	["THE MAP", "Click a glowing node to travel there. You can only move along the dotted paths.\nFIGHT - a tactical battle.   HAZARD - a risky event (lose HP, find loot, or find a shortcut).\nCACHE - free weapon or Energy Drink.   BOSS - beat it to clear the realm."],
-	["BATTLES", "You get 4 AP (action points) every turn.\nClick a blue tile to move (1 AP per tile).   Click an enemy to attack (2-3 AP).\nPress H to chug an Energy Drink (+35 HP, 1 AP).   Press E (or END TURN) when you're done."],
-	["WEAPONS", "Press 1-4 to switch weapons for free. Swords and mallets hit the tile next to you. Soakers and nailguns shoot from range, but you need a clear line of sight - vending machines block shots. Hover an enemy to see your HIT CHANCE: closer is better."],
-	["SURVIVAL TIPS", "Dark tiles are fog - monsters hide there. Avoid the spike traps (-8 HP). Kill shooters first, make melee monsters walk to you while you soak them, and save drinks for boss fights. You heal a little after every win and fully at each new realm."],
+	["BATTLES", "You get 4 AP (action points) every turn.\nClick a cyan tile to move (1 AP per tile).   Click an enemy to attack (2 AP).\nPress H to chug an Energy Drink (+35 HP, 2 AP).   Press E (or END TURN) when you're done."],
+	["WEAPONS & COVER", "Press 1-4 to switch weapons for free. Swords and mallets hit the tile next to you. Nailguns and Soakers shoot anything in the pink range. Hover an enemy for its HIT badge: 85% in the open, 60% behind a crate (half cover), 35% behind a vending machine (full cover). Enemies use cover rules against you too - so hide!"],
+	["SURVIVAL TIPS", "Dark tiles are fog - monsters hide there. Avoid the spike traps (-8 HP). Kill shooters first, make melee monsters walk to you while you soak them, and save drinks for boss fights. You heal a little after every win and fully at each new realm. F11 toggles fullscreen."],
 ]
 
 
 func _ready() -> void:
 	theme = UiKit.theme()
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiKit.fit_design(self)
 	var bg := ColorRect.new()
 	bg.color = UiKit.BG
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -68,4 +68,4 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func continue_to_map() -> void:
-	get_tree().change_scene_to_file("res://scenes/overworld/OverworldMap.tscn")
+	get_tree().change_scene_to_file("res://scenes/overworld/NodeMap.tscn")

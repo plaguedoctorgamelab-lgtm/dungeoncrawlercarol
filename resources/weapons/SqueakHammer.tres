@@ -1,15 +1,17 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/weapon_squeak_hammer.png" id="1_rpnnq"]
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_star_slash.png" id="2_ioidb"]
-[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="3_i0mm0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapon_squeak_hammer.png" id="1_ioidb"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_star_slash.tres" id="2_i0mm0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_star_slash.png" id="3_f15ax"]
+[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="4_46iq7"]
 
 [resource]
-script = ExtResource("3_i0mm0")
+script = ExtResource("4_46iq7")
 weapon_id = "squeak_hammer"
-display_name = "Squeaky Mallet"
+display_name = "Squeaky Foam Mallet"
 damage = 36.0
-projectile_texture = ExtResource("2_ioidb")
-icon = ExtResource("1_rpnnq")
+projectile_texture = ExtResource("3_f15ax")
+projectile = ExtResource("2_i0mm0")
+icon = ExtResource("1_ioidb")
 description = "Gigantic foam mallet. SQUEAK. Heavy melee drop."
 projectile_tint = Color(1, 0.95, 0.3, 1)

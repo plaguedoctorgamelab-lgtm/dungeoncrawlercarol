@@ -25,10 +25,12 @@ func check(cond: bool, label: String) -> void:
 func _run() -> void:
 	Engine.time_scale = 8.0
 	gs = root.get_node("GameState")
-	save = root.get_node("SaveSystem")
+	save = root.get_node("SaveManager")
 	save.base_dir = "user://test_saves"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://test_saves"))
 
+	print("== HD display settings ==")
+	_test_display()
 	print("== Resources ==")
 	_test_resources()
 	print("== Combat math ==")
@@ -54,6 +56,30 @@ func _run() -> void:
 	quit(failures)
 
 
+func _test_display() -> void:
+	check(int(ProjectSettings.get_setting("display/window/size/viewport_width")) == 1920 and int(ProjectSettings.get_setting("display/window/size/viewport_height")) == 1080, "viewport is 1920x1080")
+	check(int(ProjectSettings.get_setting("display/window/size/mode")) == 3, "boots fullscreen (mode 3)")
+	check(String(ProjectSettings.get_setting("display/window/stretch/mode")) == "canvas_items" and String(ProjectSettings.get_setting("display/window/stretch/aspect")) == "keep", "stretch canvas_items / keep")
+	check(int(ProjectSettings.get_setting("rendering/textures/canvas_textures/default_texture_filter")) == 1, "linear texture filtering")
+	check(gs.has_method("toggle_fullscreen"), "F11 fullscreen toggle in GameState")
+	check(IsometricGrid.CELL == Vector2i(128, 64), "128x64 isometric tiles")
+	# SpriteScaler: a raw 512x512 texture is normalized to each footprint.
+	var img := Image.create(512, 512, false, Image.FORMAT_RGBA8)
+	var tex := ImageTexture.create_from_image(img)
+	var spr := Sprite2D.new()
+	spr.texture = tex
+	var drawn := SpriteScaler.fit(spr, SpriteScaler.UNIT)
+	check(drawn.is_equal_approx(Vector2(128, 128)), "512px sprite scales to a 128x128 unit footprint")
+	drawn = SpriteScaler.fit(spr, SpriteScaler.BOSS)
+	check(drawn.is_equal_approx(Vector2(256, 256)), "512px sprite scales to a 256x256 boss footprint")
+	drawn = SpriteScaler.fit(spr, SpriteScaler.PROJECTILE)
+	check(drawn.is_equal_approx(Vector2(56, 56)), "512px sprite scales to a 56x56 projectile")
+	spr.free()
+	check(SpriteScaler.texture("definitely_missing_sprite") != null, "missing PNG falls back to a placeholder")
+	var real: Texture2D = SpriteScaler.texture("carol_iso")
+	check(real != null and real.get_width() >= 128, "HD sprites imported (carol %dpx)" % (real.get_width() if real else 0))
+
+
 func _test_resources() -> void:
 	var roster: GDScript = load("res://scripts/data/Roster.gd")
 	check(roster.ENEMIES.size() == 24, "roster has 24 monsters")
@@ -68,15 +94,32 @@ func _test_resources() -> void:
 	check(bosses == 4, "4 realm bosses")
 	for f in ["NeonSword", "SuperSoaker", "SqueakHammer", "Nailgun"]:
 		var w: WeaponData = load("res://resources/weapons/%s.tres" % f)
-		check(w != null and w.icon != null and w.projectile_texture != null, "weapon resource " + f)
+		check(w != null and w.icon != null and w.projectile != null and w.ap_cost == 2, "weapon resource " + f + " (2 AP)")
+	check(roster.PROJECTILES.size() == 15, "15 projectile definitions")
+	var motions := {}
+	for pd in roster.PROJECTILES:
+		var p: ProjectileData = load("res://resources/projectiles/%s.tres" % pd["id"])
+		check(p != null and p.texture != null and p.speed > 0.0, "projectile resource %s" % pd["id"])
+		if p:
+			motions[p.motion] = true
+	check(motions.size() >= 4, "projectiles use %d motion styles" % motions.size())
+	for e in roster.ENEMIES:
+		var d: EnemyData = load("res://resources/enemies/%s.tres" % e["id"])
+		if d.is_ranged and d.projectile == null:
+			check(false, "%s missing ProjectileData" % e["id"])
 
 
 func _test_math() -> void:
-	check(is_equal_approx(CombatMath.hit_chance(true, 0.0, true), 0.85), "ranged base 85%")
-	check(is_equal_approx(CombatMath.hit_chance(false, 1.0, true), 0.90), "melee adjacent 90%")
-	check(is_equal_approx(CombatMath.hit_chance(true, 4.0, true), 0.65), "ranged 4 tiles = 65%")
-	check(is_equal_approx(CombatMath.hit_chance(true, 20.0, true), 0.30), "30% floor")
-	check(CombatMath.hit_chance(true, 2.0, false) == 0.0, "no LOS = 0%")
+	check(is_equal_approx(CombatMath.hit_chance(CombatMath.COVER_NONE), 0.85), "open ground 85%")
+	check(is_equal_approx(CombatMath.hit_chance(CombatMath.COVER_HALF), 0.60), "half cover 60%")
+	check(is_equal_approx(CombatMath.hit_chance(CombatMath.COVER_FULL), 0.35), "full cover 35%")
+	check(CombatMath.hit_chance(CombatMath.COVER_NONE, false) == 0.0, "no LOS = 0%")
+	check(CombatMath.badge_text(0.6) == "60% HIT", "badge text reads 60% HIT")
+	var mults := []
+	for row in gs.DIFFICULTY_TABLE:
+		mults.append(row["hp"])
+	check(mults == [0.8, 1.0, 1.3, 1.6], "difficulty HP/DMG multipliers %s" % str(mults))
+	check(gs.DIFFICULTY_TABLE[3]["permadeath"] and gs.DIFFICULTY_TABLE[3]["sight"] < gs.DIFFICULTY_TABLE[1]["sight"], "EXTREME: permadeath + tight fog")
 
 
 func _test_overworld() -> void:
@@ -108,7 +151,7 @@ func _test_title() -> void:
 	current_scene.continue_to_map()
 	await process_frame
 	await process_frame
-	check(current_scene.name == "OverworldMap", "How to Play continues to the overworld")
+	check(current_scene.name == "NodeMap", "How to Play continues to the overworld")
 	check(gs.map_data["nodes"].size() >= 15, "overworld generated with %d nodes" % gs.map_data["nodes"].size())
 
 
@@ -134,7 +177,7 @@ func _start_battle(realm: int, boss: bool) -> Node:
 	gs.start_realm(realm)
 	var node_id: int = gs.map_data["boss_id"] if boss else gs.available_nodes()[0]
 	gs.pending_node = node_id
-	change_scene_to_file("res://scenes/tactical/TacticalBattle.tscn")
+	change_scene_to_file("res://scenes/tactical/TacticalBattlefield.tscn")
 	await process_frame
 	var battle := current_scene
 	var guard := 0
@@ -146,11 +189,21 @@ func _start_battle(realm: int, boss: bool) -> Node:
 
 func _test_tactical() -> void:
 	var battle := await _start_battle(0, false)
-	check(battle.name == "TacticalBattle", "tactical scene loaded")
+	check(battle.name == "TacticalBattlefield", "tactical scene loaded")
 	check(battle.is_player_phase(), "player phase starts")
 	check(battle.carol.ap == 4, "Carol has 4 AP")
 	check(battle.enemies.size() >= 2, "enemy squad spawned (%d)" % battle.enemies.size())
-	check(battle.grid.ground.get_used_cells().size() == 144, "12x12 TileMapLayer floor")
+	var tiles: int = battle.grid.ground.get_used_cells().size()
+	check(battle.grid.width >= 10 and battle.grid.width <= 12 and tiles == battle.grid.width * battle.grid.height, "%dx%d TileMapLayer floor" % [battle.grid.width, battle.grid.height])
+	check(battle.camera.zoom == Vector2.ONE and battle.y_sort_enabled, "fixed 1:1 camera, y-sorted battlefield")
+	var top: Vector2 = battle.grid.cell_to_world(Vector2i(0, 0))
+	var bottom: Vector2 = battle.grid.cell_to_world(Vector2i(battle.grid.width - 1, battle.grid.height - 1))
+	var left: Vector2 = battle.grid.cell_to_world(Vector2i(0, battle.grid.height - 1))
+	var right: Vector2 = battle.grid.cell_to_world(Vector2i(battle.grid.width - 1, 0))
+	check(right.x - left.x + 128 <= 1920 and bottom.y - top.y + 64 <= 1080 - 230, "room fits the 1920x1080 view between the HUD bars")
+	var csprite: Sprite2D = battle.carol.sprite
+	var csize: Vector2 = csprite.texture.get_size() * csprite.scale
+	check(csize.x <= 128.5 and csize.y <= 128.5 and maxf(csize.x, csize.y) >= 127.5, "Carol drawn at a 128px footprint")
 	check(battle.grid.is_cell_visible(battle.carol.cell), "fog: Carol's tile is visible")
 	var far := Vector2i(battle.grid.width - 1, 0)
 	check(not battle.grid.is_cell_visible(far), "fog: far corner hidden at sight %d" % gs.sight_radius())
@@ -169,6 +222,34 @@ func _test_tactical() -> void:
 	await physics_frame
 	check(clear_before and not battle.grid.has_los(a, b), "RayCast2D LOS blocked by vending machine")
 	check(battle.attack_chance(a, b, true) == 0.0, "blocked shot = 0% hit")
+	battle._remove_last_blocker(mid)
+	await physics_frame
+	# Cover next to the target, on the attacker's side.
+	var t := Vector2i(7, 5)
+	var shooter := Vector2i(3, 5)
+	var side := Vector2i(6, 5)
+	var back := Vector2i(8, 5)
+	for c in [t, shooter, side, back, Vector2i(5, 5), Vector2i(4, 5)]:
+		if battle.grid.blockers.has(c):
+			battle._remove_last_blocker(c)
+	await physics_frame
+	check(is_equal_approx(battle.attack_chance(shooter, t, true), 0.85), "open shot 85%")
+	battle.grid.add_blocker(side, "crate", UiKit.sprite("cover_wooden_crate"), false)
+	check(is_equal_approx(battle.attack_chance(shooter, t, true), 0.60), "crate = half cover 60%")
+	battle._remove_last_blocker(side)
+	battle.grid.add_blocker(side, "vending", UiKit.sprite("cover_vending_machine"), true)
+	await physics_frame
+	await physics_frame
+	check(is_equal_approx(battle.attack_chance(shooter, t, true), 0.35), "vending machine = full cover 35%")
+	battle._remove_last_blocker(side)
+	battle.grid.add_blocker(back, "vending", UiKit.sprite("cover_vending_machine"), true)
+	await physics_frame
+	check(is_equal_approx(battle.attack_chance(shooter, t, true), 0.85), "flanked: cover on the far side doesn't help")
+	battle._remove_last_blocker(back)
+	await physics_frame
+	battle._refresh_player_view()
+	check(not battle.overlay.move_cells.is_empty(), "reachable tiles highlighted (cyan)")
+	check(not battle.overlay.range_cells.is_empty(), "attack range highlighted (pink)")
 
 	# Move Carol one step.
 	var start: Vector2i = battle.carol.cell
@@ -197,13 +278,15 @@ func _test_tactical() -> void:
 	check(battle.carol.ap == 1, "melee costs 2 AP")
 	var second: bool = await battle.player_attack(e)
 	check(not second or e.is_dead(), "can't attack with 1 AP")
-	check(battle.use_drink() or gs.energy_drinks == 0, "energy drink usable for 1 AP")
+	gs.energy_drinks = 1
+	check(not battle.use_drink(), "energy drink needs 2 AP")
 
 	# End turn -> enemy phase -> back to player.
 	battle.forced_roll = 1.0 # enemies always miss
 	await battle.end_player_turn()
 	check(battle.is_player_phase() and battle.turn_number == 2, "enemy phase ran and turn 2 started")
 	check(battle.carol.ap == 4, "AP refilled")
+	check(battle.use_drink() and battle.carol.ap == 2, "energy drink costs 2 AP")
 
 	# Kill everything -> victory -> back to map.
 	battle.forced_roll = 0.0
@@ -216,7 +299,7 @@ func _test_tactical() -> void:
 	battle.hud.result_buttons()[0].pressed.emit()
 	await process_frame
 	await process_frame
-	check(current_scene.name == "OverworldMap", "returned to overworld")
+	check(current_scene.name == "NodeMap", "returned to overworld")
 
 
 func _test_final_boss() -> void:
@@ -224,6 +307,11 @@ func _test_final_boss() -> void:
 		var battle := await _start_battle(realm, true)
 		var boss = battle.enemies[0]
 		check(boss.data.is_boss and boss.data.enemy_id == Roster.boss_for_realm(realm), "realm %d boss: %s" % [realm + 1, boss.display_name])
+		var bsize: Vector2 = boss.sprite.texture.get_size() * boss.sprite.scale
+		check(boss.footprint().size() == 4 and maxf(bsize.x, bsize.y) >= 255.0, "boss covers 2x2 tiles at 256px")
+		check(battle.enemy_at(boss.cell + Vector2i(1, 1)) == boss, "any boss tile targets the boss")
+		if realm == 2:
+			check(gs.weapons.has("super_soaker"), "Super Soaker 9000 owned by the Fire level")
 		if realm < 3:
 			for en in battle.enemies.duplicate():
 				en.take_damage(9999)
@@ -231,7 +319,7 @@ func _test_final_boss() -> void:
 			battle.hud.result_buttons()[0].pressed.emit()
 			await process_frame
 			await process_frame
-			check(gs.realm == realm + 1 and current_scene.name == "OverworldMap", "boss %d clears realm -> realm %d" % [realm + 1, realm + 2])
+			check(gs.realm == realm + 1 and current_scene.name == "NodeMap", "boss %d clears realm -> realm %d" % [realm + 1, realm + 2])
 		else:
 			check(battle.penny != null and battle.penny.caged, "Princess Penny caged in the boardroom")
 			for en in battle.enemies.duplicate():
@@ -267,6 +355,14 @@ func _test_save() -> void:
 	check(not gs.can_save_now(), "Hard: save blocked mid-realm")
 	gs.difficulty = 1
 	check(gs.can_save_now(), "Medium: save allowed at every node")
+	save.wipe_save(1)
+	gs.active_slot = 1
+	check(gs.autosave(false) and save.has_save(1), "Medium auto-saves at the start of a room")
+	save.wipe_save(1)
+	gs.difficulty = 2
+	check(not gs.autosave(false) and not save.has_save(1), "Hard skips room auto-saves")
+	check(gs.autosave(true) and save.has_save(1), "Hard auto-saves at level start")
+	save.wipe_save(1)
 	# EXTREME permadeath wipe
 	gs.new_run(3, 7)
 	save.save_game(2)

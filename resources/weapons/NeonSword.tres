@@ -1,14 +1,16 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/weapon_neon_sword.png" id="1_uhg52"]
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_star_slash.png" id="2_btwik"]
-[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="3_huvhp"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapon_neon_sword.png" id="1_btwik"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_star_slash.tres" id="2_huvhp"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_star_slash.png" id="3_jygof"]
+[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="4_5togm"]
 
 [resource]
-script = ExtResource("3_huvhp")
+script = ExtResource("4_5togm")
 weapon_id = "neon_sword"
 display_name = "Neon Star-Sword"
 damage = 25.0
-projectile_texture = ExtResource("2_btwik")
-icon = ExtResource("1_uhg52")
+projectile_texture = ExtResource("3_jygof")
+projectile = ExtResource("2_huvhp")
+icon = ExtResource("1_btwik")
 description = "Starting weapon. A magic star-blade that hums at a radical frequency."

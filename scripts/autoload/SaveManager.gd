@@ -27,7 +27,7 @@ func has_any_save() -> bool:
 func save_game(slot: int) -> bool:
 	var f := FileAccess.open(slot_path(slot), FileAccess.WRITE)
 	if f == null:
-		push_error("SaveSystem: cannot write %s (%s)" % [slot_path(slot), error_string(FileAccess.get_open_error())])
+		push_error("SaveManager: cannot write %s (%s)" % [slot_path(slot), error_string(FileAccess.get_open_error())])
 		return false
 	f.store_string(JSON.stringify(GameState.to_dict(), "\t"))
 	f.close()
@@ -41,7 +41,7 @@ func read_slot(slot: int) -> Dictionary:
 	var text := FileAccess.get_file_as_string(slot_path(slot))
 	var parsed: Variant = JSON.parse_string(text)
 	if typeof(parsed) != TYPE_DICTIONARY:
-		push_warning("SaveSystem: slot %d is corrupt" % slot)
+		push_warning("SaveManager: slot %d is corrupt" % slot)
 		return {}
 	return parsed
 

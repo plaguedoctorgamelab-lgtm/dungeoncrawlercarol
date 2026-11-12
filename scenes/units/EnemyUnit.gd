@@ -17,6 +17,7 @@ func setup(d: EnemyData, hp_scale: float) -> void:
 	ap = max_ap
 	bar_color = Color("#ff2bd6") if not d.is_boss else Color("#ffe600")
 	name = d.enemy_id
+	size_cells = 2 if d.is_boss else 1
 	set_texture(d.sprite_texture)
 
 

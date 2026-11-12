@@ -34,15 +34,38 @@ const ENEMIES: Array[Dictionary] = [
 	{"id": "sea_lord_boss", "name": "The Sea Lord", "role": "FINAL BOSS", "realm": 3, "hp": 300.0, "dmg": 40.0, "sight": 10, "proj": "proj_trident_beam", "range": 6, "speed": 1, "armor": 0.0, "boss": true, "flavor": "Artisan espresso is a threat to shareholder value!"},
 ]
 
+## V2: every basic attack costs 2 AP.
 const WEAPONS: Array[Dictionary] = [
 	{"id": "neon_sword", "file": "NeonSword", "name": "Neon Star-Sword", "dmg": 25.0, "ap": 2, "ranged": false, "range": 1, "proj": "proj_star_slash", "icon": "weapon_neon_sword", "tint": Color(1, 1, 1), "desc": "Starting weapon. A magic star-blade that hums at a radical frequency."},
-	{"id": "super_soaker", "file": "SuperSoaker", "name": "Super Soaker 9000", "dmg": 26.0, "ap": 3, "ranged": true, "range": 5, "proj": "proj_water_stream", "icon": "weapon_water_pistol", "tint": Color(1, 1, 1), "desc": "Pressurized neon water. Ruins suits, ruins days."},
-	{"id": "squeak_hammer", "file": "SqueakHammer", "name": "Squeaky Mallet", "dmg": 36.0, "ap": 2, "ranged": false, "range": 1, "proj": "proj_star_slash", "icon": "weapon_squeak_hammer", "tint": Color(1, 0.95, 0.3), "desc": "Gigantic foam mallet. SQUEAK. Heavy melee drop."},
-	{"id": "nailgun", "file": "Nailgun", "name": "Contractor Nailgun", "dmg": 15.0, "ap": 2, "ranged": true, "range": 7, "proj": "proj_steel_nail", "icon": "weapon_nailgun", "tint": Color(1, 1, 1), "desc": "Fast, long-range, union-certified."},
+	{"id": "super_soaker", "file": "SuperSoaker", "name": "Super Soaker 9000", "dmg": 34.0, "ap": 2, "ranged": true, "range": 5, "proj": "proj_water_stream", "icon": "weapon_water_pistol", "tint": Color(1, 1, 1), "desc": "High-pressure neon water blaster. Ruins suits, ruins days. Found before the Fire level."},
+	{"id": "squeak_hammer", "file": "SqueakHammer", "name": "Squeaky Foam Mallet", "dmg": 36.0, "ap": 2, "ranged": false, "range": 1, "proj": "proj_star_slash", "icon": "weapon_squeak_hammer", "tint": Color(1, 0.95, 0.3), "desc": "Gigantic foam mallet. SQUEAK. Heavy melee drop."},
+	{"id": "nailgun", "file": "Nailgun", "name": "Contractor Nailgun", "dmg": 16.0, "ap": 2, "ranged": true, "range": 7, "proj": "proj_steel_nail", "icon": "weapon_nailgun", "tint": Color(1, 1, 1), "desc": "Fast, long-range, union-certified."},
 ]
 
-const STARTING_WEAPONS: Array[String] = ["neon_sword", "super_soaker"]
-const DROP_WEAPONS: Array[String] = ["squeak_hammer", "nailgun"]
+const STARTING_WEAPONS: Array[String] = ["neon_sword", "nailgun"]
+## Supply caches can hand these out. The Super Soaker is guaranteed before the Fire level.
+const DROP_WEAPONS: Array[String] = ["squeak_hammer", "super_soaker"]
+const SOAKER_REALM := 2
+
+## The 15 tweened projectiles / attack effects (scripts/tools/generate_resources.gd writes
+## resources/projectiles/<id>.tres). motion: straight, arc, spin, wobble, beam.
+const PROJECTILES: Array[Dictionary] = [
+	{"id": "proj_star_slash", "name": "Neon Star Slash", "speed": 1400.0, "motion": "spin", "arc": 0.0, "spin": 2.0, "trail": Color(1, 0.3, 0.9, 0.6), "desc": "Carol's melee arc of neon stars."},
+	{"id": "proj_water_stream", "name": "Super Soaker Water Jet", "speed": 1700.0, "motion": "beam", "arc": 0.0, "spin": 0.0, "trail": Color(0.3, 0.9, 1, 0.55), "desc": "A pressurized jet of neon water."},
+	{"id": "proj_steel_nail", "name": "Steel Nail", "speed": 2000.0, "motion": "straight", "arc": 0.0, "spin": 0.0, "trail": Color(0.8, 0.8, 0.9, 0.35), "desc": "Union-certified finishing nail."},
+	{"id": "proj_megaphone_wave", "name": "Megaphone Shout", "speed": 1000.0, "motion": "wobble", "arc": 0.0, "spin": 0.0, "trail": Color(1, 1, 0.4, 0.3), "desc": "MA'AM. This is a PRIVATE sidewalk."},
+	{"id": "proj_tax_receipt", "name": "Flying Tax Receipt", "speed": 900.0, "motion": "wobble", "arc": 0.0, "spin": 0.0, "trail": Color(1, 1, 1, 0), "desc": "An itemized list of your pain."},
+	{"id": "proj_crypto_coin", "name": "Crypto Coin", "speed": 1000.0, "motion": "arc", "arc": 70.0, "spin": 3.0, "trail": Color(1, 0.85, 0.2, 0.4), "desc": "To the moon (and your face)."},
+	{"id": "proj_amazon_box", "name": "Drop-Shipped Box", "speed": 850.0, "motion": "arc", "arc": 140.0, "spin": 1.0, "trail": Color(1, 1, 1, 0), "desc": "Package delivered. Forcefully."},
+	{"id": "proj_ad_popup", "name": "Spam Pop-Up Ad", "speed": 950.0, "motion": "wobble", "arc": 0.0, "spin": 0.0, "trail": Color(1, 0.4, 0.4, 0.35), "desc": "You are the 1,000,000th visitor!"},
+	{"id": "proj_vape_ring", "name": "Vape Ring", "speed": 800.0, "motion": "wobble", "arc": 0.0, "spin": 0.0, "trail": Color(0.6, 0.8, 1, 0.4), "desc": "Blue-raspberry smoke ring."},
+	{"id": "proj_bug_report", "name": "Bug Report", "speed": 1150.0, "motion": "straight", "arc": 0.0, "spin": 0.0, "trail": Color(0.5, 1, 0.4, 0.3), "desc": "Won't fix. Works on my machine."},
+	{"id": "proj_pie_chart", "name": "Flaming Pie Chart", "speed": 1000.0, "motion": "arc", "arc": 90.0, "spin": 2.0, "trail": Color(1, 0.5, 0.1, 0.5), "desc": "Q3 projections, on fire."},
+	{"id": "proj_pink_slip", "name": "Pink Slip Eviction Notice", "speed": 1000.0, "motion": "wobble", "arc": 0.0, "spin": 0.0, "trail": Color(1, 0.5, 0.8, 0.4), "desc": "You're fired. And evicted."},
+	{"id": "proj_water_squirt", "name": "Sea Water Squirt", "speed": 1200.0, "motion": "arc", "arc": 40.0, "spin": 0.0, "trail": Color(0.3, 0.7, 1, 0.4), "desc": "A salty squirt of brine."},
+	{"id": "proj_dollar_lure", "name": "Dollar Lure", "speed": 900.0, "motion": "wobble", "arc": 0.0, "spin": 0.0, "trail": Color(0.4, 1, 0.5, 0.4), "desc": "A campaign contribution on a hook."},
+	{"id": "proj_trident_beam", "name": "CEO Trident Beam", "speed": 1900.0, "motion": "beam", "arc": 0.0, "spin": 0.0, "trail": Color(0, 0.95, 1, 0.6), "desc": "The Sea Lord's quarterly-earnings death ray."},
+]
 
 ## Realm layout helpers.
 const REALM_NAMES: Array[String] = ["Earth Realm", "Air Realm", "Fire Realm", "Water Realm"]
@@ -85,3 +108,7 @@ static func weapon_name(weapon_id: String) -> String:
 		if w["id"] == weapon_id:
 			return String(w["name"])
 	return weapon_id
+
+
+static func projectile_file(proj_id: String) -> String:
+	return "res://resources/projectiles/%s.tres" % proj_id

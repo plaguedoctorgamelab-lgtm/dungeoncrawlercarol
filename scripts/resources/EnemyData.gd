@@ -10,6 +10,8 @@ extends Resource
 @export var sight_radius_tiles: int = 6
 @export var is_ranged: bool = false
 @export var projectile_texture: Texture2D
+## V2 tweened projectile / attack effect.
+@export var projectile: ProjectileData
 @export var sprite_texture: Texture2D
 
 @export_group("Behaviour")

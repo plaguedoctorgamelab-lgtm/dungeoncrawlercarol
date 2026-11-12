@@ -12,7 +12,7 @@ var _load_btn: Button
 
 func _ready() -> void:
 	theme = UiKit.theme()
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiKit.fit_design(self)
 
 	var bg := ColorRect.new()
 	bg.color = UiKit.BG
@@ -64,7 +64,7 @@ func _ready() -> void:
 	_load_btn = UiKit.button("LOAD GAME", 180)
 	_load_btn.name = "LoadGame"
 	_load_btn.pressed.connect(_open_load_menu)
-	_load_btn.disabled = not SaveSystem.has_any_save()
+	_load_btn.disabled = not SaveManager.has_any_save()
 	actions.add_child(_load_btn)
 	var quit_btn := UiKit.button("QUIT", 120)
 	quit_btn.pressed.connect(func(): get_tree().quit())
@@ -91,4 +91,4 @@ func _open_load_menu() -> void:
 	var menu := SAVE_MENU.instantiate()
 	menu.allow_save = false
 	add_child(menu)
-	menu.closed.connect(func(): _load_btn.disabled = not SaveSystem.has_any_save())
+	menu.closed.connect(func(): _load_btn.disabled = not SaveManager.has_any_save())

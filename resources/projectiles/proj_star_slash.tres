@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ProjectileData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ProjectileData.gd" id="1_0bop6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_star_slash.png" id="2_vigng"]
+
+[resource]
+script = ExtResource("1_0bop6")
+projectile_id = "proj_star_slash"
+display_name = "Neon Star Slash"
+texture = ExtResource("2_vigng")
+speed = 1400.0
+motion = "spin"
+spin_turns = 2.0
+trail_color = Color(1, 0.3, 0.9, 0.6)
+description = "Carol's melee arc of neon stars."

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ProjectileData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ProjectileData.gd" id="1_7h31u"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_dollar_lure.png" id="2_lykse"]
+
+[resource]
+script = ExtResource("1_7h31u")
+projectile_id = "proj_dollar_lure"
+display_name = "Dollar Lure"
+texture = ExtResource("2_lykse")
+speed = 900.0
+motion = "wobble"
+trail_color = Color(0.4, 1, 0.5, 0.4)
+description = "A campaign contribution on a hook."

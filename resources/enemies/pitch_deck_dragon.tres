@@ -1,18 +1,20 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_pie_chart.png" id="1_aov3m"]
-[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_refkf"]
-[ext_resource type="Texture2D" path="res://assets/sprites/pitch_deck_dragon.png" id="3_8jl1v"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_pie_chart.tres" id="1_refkf"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_pie_chart.png" id="2_8jl1v"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="3_4dy4v"]
+[ext_resource type="Texture2D" path="res://assets/sprites/pitch_deck_dragon.png" id="4_8oa8f"]
 
 [resource]
-script = ExtResource("2_refkf")
+script = ExtResource("3_4dy4v")
 enemy_id = "pitch_deck_dragon"
 display_name = "Slide-Deck Mini-Dragon"
 max_hp = 55.0
 base_damage = 18.0
 is_ranged = true
-projectile_texture = ExtResource("1_aov3m")
-sprite_texture = ExtResource("3_8jl1v")
+projectile_texture = ExtResource("2_8jl1v")
+projectile = ExtResource("1_refkf")
+sprite_texture = ExtResource("4_8oa8f")
 role = "Area Fire Shooter"
 realm = 2
 attack_range_tiles = 5

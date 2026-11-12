@@ -1,16 +1,18 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/weapon_nailgun.png" id="1_t321u"]
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_steel_nail.png" id="2_pkf75"]
-[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="3_qdl3e"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapon_nailgun.png" id="1_pkf75"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_steel_nail.tres" id="2_qdl3e"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_steel_nail.png" id="3_51tb8"]
+[ext_resource type="Script" path="res://scripts/resources/WeaponData.gd" id="4_u0nnc"]
 
 [resource]
-script = ExtResource("3_qdl3e")
+script = ExtResource("4_u0nnc")
 weapon_id = "nailgun"
 display_name = "Contractor Nailgun"
-damage = 15.0
+damage = 16.0
 is_ranged = true
 max_range_tiles = 7
-projectile_texture = ExtResource("2_pkf75")
-icon = ExtResource("1_t321u")
+projectile_texture = ExtResource("3_51tb8")
+projectile = ExtResource("2_qdl3e")
+icon = ExtResource("1_pkf75")
 description = "Fast, long-range, union-certified."

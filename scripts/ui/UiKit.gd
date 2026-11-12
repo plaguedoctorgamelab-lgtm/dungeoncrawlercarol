@@ -9,6 +9,9 @@ const GREEN := Color("#7dff4a")
 const RED := Color("#ff3b3b")
 const BG := Color("#140726")
 const PANEL := Color("#22103d")
+## Menus and HUDs are laid out on a 1280x720 design grid and scaled up to the 1920x1080
+## viewport (x1.5). Fonts use MSDF (project setting) so scaled text stays sharp.
+const DESIGN := Vector2(1280, 720)
 
 static var _theme: Theme
 
@@ -63,6 +66,23 @@ static func _box(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 	return s
 
 
+## Lays `c` out on the 1280x720 design grid and scales it to fill the 1920x1080 viewport.
+static func fit_design(c: Control) -> void:
+	c.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	c.position = Vector2.ZERO
+	c.size = DESIGN
+	var view := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 1920)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 1080)))
+	var s := minf(view.x / DESIGN.x, view.y / DESIGN.y)
+	c.scale = Vector2(s, s)
+
+
+## Design-grid scale factor (1.5 at 1920x1080).
+static func design_scale() -> float:
+	return float(ProjectSettings.get_setting("display/window/size/viewport_width", 1920)) / DESIGN.x
+
+
 static func label(text: String, size: int = 18, color: Color = Color.WHITE) -> Label:
 	var l := Label.new()
 	l.text = text
@@ -84,13 +104,13 @@ static func texture_rect(tex: Texture2D, size: Vector2) -> TextureRect:
 	r.custom_minimum_size = size
 	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	r.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	return r
 
 
+## Loads a sprite, falling back to a procedural placeholder when the PNG is missing.
 static func sprite(id: String) -> Texture2D:
-	var path := "res://assets/sprites/%s.png" % id
-	return load(path) if ResourceLoader.exists(path) else null
+	return SpriteScaler.texture(id)
 
 
 static func set_bar_color(bar: ProgressBar, color: Color) -> void:

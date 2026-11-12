@@ -15,7 +15,7 @@ func setup(c: Vector2i, world: Vector2, id: String = "energy_drink") -> void:
 		var w := GameState.weapon_data(id)
 		if w:
 			sprite.texture = w.icon
-	sprite.offset = Vector2(0, -6)
+	SpriteScaler.fit(sprite, SpriteScaler.DROP, 8.0)
 
 
 ## Applies the item to the run state. Returns a log line.

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ProjectileData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ProjectileData.gd" id="1_7omfa"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_pink_slip.png" id="2_4rwvm"]
+
+[resource]
+script = ExtResource("1_7omfa")
+projectile_id = "proj_pink_slip"
+display_name = "Pink Slip Eviction Notice"
+texture = ExtResource("2_4rwvm")
+speed = 1000.0
+motion = "wobble"
+trail_color = Color(1, 0.5, 0.8, 0.4)
+description = "You're fired. And evicted."

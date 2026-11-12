@@ -1,19 +1,21 @@
 [gd_resource type="Resource" script_class="EnemyData" format=3]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/proj_crypto_coin.png" id="1_xhh3p"]
-[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="2_lpdgu"]
-[ext_resource type="Texture2D" path="res://assets/sprites/crypto_bat.png" id="3_kxuib"]
+[ext_resource type="Resource" path="res://resources/projectiles/proj_crypto_coin.tres" id="1_lpdgu"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_crypto_coin.png" id="2_kxuib"]
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.gd" id="3_dqg14"]
+[ext_resource type="Texture2D" path="res://assets/sprites/crypto_bat.png" id="4_okip8"]
 
 [resource]
-script = ExtResource("2_lpdgu")
+script = ExtResource("3_dqg14")
 enemy_id = "crypto_bat"
 display_name = "Crypto Bro Bat"
 max_hp = 30.0
 base_damage = 11.0
 sight_radius_tiles = 7
 is_ranged = true
-projectile_texture = ExtResource("1_xhh3p")
-sprite_texture = ExtResource("3_kxuib")
+projectile_texture = ExtResource("2_kxuib")
+projectile = ExtResource("1_lpdgu")
+sprite_texture = ExtResource("4_okip8")
 role = "Fast Flier"
 realm = 1
 attack_range_tiles = 4

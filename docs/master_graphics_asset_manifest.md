@@ -2,6 +2,28 @@
 
 This document is a complete, consolidated catalog of all visual assets required to build *Dungeon Crawler Carol: Lair of The Sea Lord*. It includes sprite IDs, technical descriptions, asset categories, and exact AI image generation prompts for every character, enemy, weapon, projectile effect, terrain tile, cover object, and UI element.
 
+## 0. V2 HD Asset Specs (1920x1080 Fullscreen)
+
+V2 replaces the 16x16 / 32x32 pixel sprites with high-resolution transparent PNGs:
+
+* **Source art:** `512x512` (or larger) AI generations on `#00FF00`, with the green background removed.
+* **Pipeline:** `scripts/tools/build_assets.gd` crops each master to its visible pixels, removes leftover green spill, and stores it at about 2x its on-screen footprint (units 256px, bosses 512px, vending machines 256x384, projectiles/items 128px). Floor tiles are cut to exact `128x64` diamonds; title and victory art is resized to `1920x1080`.
+* **Runtime scaling:** `scripts/util/SpriteScaler.gd` reads each texture's size and scales the `Sprite2D` uniformly to its footprint, bottom-center anchored on the isometric tile center.
+* **Filtering:** Linear.
+* **Missing art:** `SpriteScaler.texture()` returns a procedural placeholder for any PNG that isn't in `res://assets/sprites/` yet.
+
+| Asset family | Battlefield footprint | Stored size |
+| :--- | :--- | :--- |
+| Isometric floor tiles (`tile_*_floor_iso`) | `128 x 64` diamond | `128 x 64` |
+| Carol, Princess Penny, regular enemies (1x1 tile) | `128 x 128` | max `256 x 256` |
+| Level bosses (2x2 tiles) | `256 x 256` | max `512 x 512` |
+| Half cover (`cover_wooden_crate`) | `128 x 128` | max `256 x 256` |
+| Full cover (`cover_vending_machine`) | `128 x 192` | max `256 x 384` |
+| Projectiles (`proj_*`) and pickups | `56 x 56` | max `128 x 128` |
+| Spike hazard decal (`hazard_spikes_iso`) | `112 x 84` | max `128 x 96` |
+| Portraits (`carol_portrait`, `penny_portrait`) | UI | `256 x 256` |
+| Screens (`screen_title`, `screen_victory`) | full screen | `1920 x 1080` |
+
 ## 1. Master Style Guide & AI Prompt Anchor
 
 When generating imagery with AI tools (Midjourney, DALL-E 3, Stable Diffusion), **always append the Master Style Anchor Block** to the end of every prompt to maintain visual consistency across all sprites.

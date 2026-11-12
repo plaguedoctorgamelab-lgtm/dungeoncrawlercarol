@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ProjectileData" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ProjectileData.gd" id="1_esrwt"]
+[ext_resource type="Texture2D" path="res://assets/sprites/proj_vape_ring.png" id="2_d0ox0"]
+
+[resource]
+script = ExtResource("1_esrwt")
+projectile_id = "proj_vape_ring"
+display_name = "Vape Ring"
+texture = ExtResource("2_d0ox0")
+speed = 800.0
+motion = "wobble"
+trail_color = Color(0.6, 0.8, 1, 0.4)
+description = "Blue-raspberry smoke ring."

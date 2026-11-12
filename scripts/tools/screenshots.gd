@@ -26,7 +26,11 @@ func _wait(n: int) -> void:
 
 func _run() -> void:
 	var gs := root.get_node("GameState")
-	root.size = Vector2i(1280, 720)
+	# Never touch the player's real save slots.
+	root.get_node("SaveManager").base_dir = "user://screenshot_saves"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://screenshot_saves"))
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	root.size = Vector2i(1920, 1080)
 	change_scene_to_file("res://scenes/ui/TitleScreen.tscn")
 	await _wait(10)
 	await _snap("01_title.png")
@@ -36,13 +40,13 @@ func _run() -> void:
 	await _snap("01b_how_to_play.png")
 	gs.complete_node(gs.available_nodes()[0])
 	gs.overworld_banner = "Earth Realm - Corporate Suburbs & HOA Dungeons"
-	change_scene_to_file("res://scenes/overworld/OverworldMap.tscn")
+	change_scene_to_file("res://scenes/overworld/NodeMap.tscn")
 	await _wait(10)
 	await _snap("02_overworld.png")
 	for realm in [0, 3]:
 		gs.start_realm(realm)
 		gs.pending_node = gs.map_data["boss_id"] if realm == 3 else gs.available_nodes()[0]
-		change_scene_to_file("res://scenes/tactical/TacticalBattle.tscn")
+		change_scene_to_file("res://scenes/tactical/TacticalBattlefield.tscn")
 		await _wait(10)
 		var battle := current_scene
 		while not battle.ready_done:

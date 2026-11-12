@@ -1,11 +1,12 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://scenes/tactical/TacticalBattle.gd" id="1_b"]
+[ext_resource type="Script" path="res://scenes/tactical/TacticalBattlefield.gd" id="1_b"]
 [ext_resource type="Script" path="res://scenes/tactical/IsometricGrid.gd" id="2_g"]
 [ext_resource type="Script" path="res://scenes/tactical/GridOverlay.gd" id="3_o"]
 [ext_resource type="PackedScene" path="res://scenes/ui/TacticalHUD.tscn" id="4_h"]
 
-[node name="TacticalBattle" type="Node2D"]
+[node name="TacticalBattlefield" type="Node2D"]
+y_sort_enabled = true
 script = ExtResource("1_b")
 
 [node name="Background" type="CanvasLayer" parent="."]
