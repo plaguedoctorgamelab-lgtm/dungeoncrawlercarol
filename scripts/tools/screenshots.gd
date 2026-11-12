@@ -52,7 +52,10 @@ func _run() -> void:
 		while not battle.ready_done:
 			await process_frame
 		# Reveal the whole map for the screenshot.
+		for c in battle.grid.all_cells():
+			battle.grid.explored[c] = true
 		battle.grid.update_fog(battle.carol.cell, 30)
+		battle._refresh_player_view()
 		for e in battle.enemies:
 			e.visible = true
 		var e0 = battle.enemies[0]

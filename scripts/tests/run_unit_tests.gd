@@ -47,6 +47,8 @@ func _run() -> void:
 	await _test_final_boss()
 	print("== Save system ==")
 	_test_save()
+	print("== v0.3 features ==")
+	await _test_v03()
 	print("== Victory screen ==")
 	await _test_victory()
 
@@ -94,7 +96,8 @@ func _test_resources() -> void:
 	check(bosses == 4, "4 realm bosses")
 	for f in ["NeonSword", "SuperSoaker", "SqueakHammer", "Nailgun"]:
 		var w: WeaponData = load("res://resources/weapons/%s.tres" % f)
-		check(w != null and w.icon != null and w.projectile != null and w.ap_cost == 2, "weapon resource " + f + " (2 AP)")
+		var want_ap := 1 if f == "Nailgun" else 2
+		check(w != null and w.icon != null and w.projectile != null and w.ap_cost == want_ap, "weapon resource %s (%d AP)" % [f, want_ap])
 	check(roster.PROJECTILES.size() == 15, "15 projectile definitions")
 	var motions := {}
 	for pd in roster.PROJECTILES:
@@ -129,6 +132,13 @@ func _test_overworld() -> void:
 			var n: int = m["nodes"].size()
 			var boss: int = m["boss_id"]
 			var ok := n >= 15 and n <= 20 and boss >= int(ceil(n * 0.75)) and boss < n
+			# The boss sits alone in the final layer.
+			var last_layer: int = int(m["layer_count"]) - 1
+			var in_last := 0
+			for node in m["nodes"]:
+				if int(node["layer"]) == last_layer:
+					in_last += 1
+			ok = ok and int(m["nodes"][boss]["layer"]) == last_layer and in_last == 1
 			ok = ok and OverworldGenerator.reachable_from_start(m).has(boss)
 			ok = ok and OverworldGenerator.boss_always_reachable(m)
 			if not ok or s == 0:
@@ -142,6 +152,8 @@ func _test_title() -> void:
 	var title := current_scene
 	check(title != null and title.name == "TitleScreen", "boots into TitleScreen")
 	check(title.find_children("Difficulty*", "Button", true, false).size() == 4, "4 difficulty selectors")
+	var ver = title.find_child("VersionLabel", true, false)
+	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.3.0", "title shows release number %s" % ("" if ver == null else ver.text))
 	title.selected_difficulty = 1
 	title.start_new_game()
 	await process_frame
@@ -168,6 +180,7 @@ func _test_overworld_scene() -> void:
 	map.refresh()
 	map.choose_node(target)
 	check(gs.energy_drinks > drinks_before or gs.weapons.size() > weapons_before, "supply cache gives loot")
+	check(gs.weapons.has("squeak_hammer"), "realm 1's first cache guarantees the Squeaky Foam Mallet")
 	map.close_popup()
 	await process_frame
 
@@ -184,6 +197,7 @@ func _start_battle(realm: int, boss: bool) -> Node:
 	while not battle.ready_done and guard < 200:
 		await process_frame
 		guard += 1
+	battle.juice_enabled = false
 	return battle
 
 
@@ -310,6 +324,9 @@ func _test_final_boss() -> void:
 		var bsize: Vector2 = boss.sprite.texture.get_size() * boss.sprite.scale
 		check(boss.footprint().size() == 4 and maxf(bsize.x, bsize.y) >= 255.0, "boss covers 2x2 tiles at 256px")
 		check(battle.enemy_at(boss.cell + Vector2i(1, 1)) == boss, "any boss tile targets the boss")
+		check(is_equal_approx(battle.carol.max_hp, 100.0 + 15.0 * realm), "Carol max HP %d in realm %d" % [battle.carol.max_hp, realm + 1])
+		if realm == 0:
+			await _test_boss_charge(battle, boss)
 		if realm == 2:
 			check(gs.weapons.has("super_soaker"), "Super Soaker 9000 owned by the Fire level")
 		if realm < 3:
@@ -377,3 +394,230 @@ func _test_victory() -> void:
 	await process_frame
 	await process_frame
 	check(current_scene.name == "VictoryScreen", "victory screen loads standalone")
+
+
+## Boss telegraph: first turn in reach it CHARGES (no damage), next turn it strikes.
+func _test_boss_charge(battle, boss) -> void:
+	var target: Vector2i = boss.cell + Vector2i(-1, 0)
+	if battle.grid.blockers.has(target):
+		battle._remove_last_blocker(target)
+	battle.carol.place(target, battle.grid.cell_to_world(target))
+	battle.forced_roll = 0.0
+	var hp0: float = battle.carol.hp
+	await battle.ai.act(boss)
+	check(boss.charged and battle.carol.hp == hp0, "boss telegraphs: CHARGING turn deals no damage")
+	battle._update_intents()
+	check(boss.intent == "charge", "boss intent badge shows CHARGING")
+	await battle.ai.act(boss)
+	check(not boss.charged and battle.carol.hp < hp0, "boss strikes on the turn after charging")
+	battle.carol.hp = battle.carol.max_hp
+
+
+func _clear(battle, cells: Array) -> void:
+	for c in cells:
+		if battle.grid.blockers.has(c):
+			battle._remove_last_blocker(c)
+
+
+func _park_enemies(battle, keep) -> void:
+	var i := 0
+	for e in battle.enemies:
+		if e == keep:
+			continue
+		var c := Vector2i(i, battle.grid.height - 1)
+		_clear(battle, [c])
+		e.place(c, battle.grid.cell_to_world(c))
+		i += 1
+
+
+func _test_v03() -> void:
+	# --- Pathing: every highlighted tile is reachable for exactly the AP shown.
+	var bad := 0
+	var total := 0
+	for realm in 4:
+		var b = await _start_battle(realm, false)
+		for c in b.reachable_cells:
+			total += 1
+			var path: Array = b.grid.move_path(b.carol.cell, c, b.carol.ap, b.occupied_cells(b.carol))
+			if path.size() - 1 != b.reachable_cells[c] or path.size() - 1 > b.carol.ap:
+				bad += 1
+	check(total > 0 and bad == 0, "all %d highlighted move tiles are reachable at their shown cost" % total)
+
+	# --- Seeded rooms: same run + node = same layout.
+	var b1 = await _start_battle(1, false)
+	var layout1: Array = b1.grid.blockers.keys()
+	layout1.sort()
+	var b2 = await _start_battle(1, false)
+	var layout2: Array = b2.grid.blockers.keys()
+	layout2.sort()
+	check(layout1 == layout2 and not layout1.is_empty(), "battle rooms are seeded from the run (same layout twice)")
+
+	var battle = b2
+	var g = battle.grid
+	# --- LOS step-out: a vending machine right in front of the shooter can be leaned around,
+	# but not if both sides are blocked.
+	var sh := Vector2i(3, 5)
+	var vm := Vector2i(4, 5)
+	var tg := Vector2i(8, 5)
+	var area: Array = []
+	for x in range(2, 10):
+		for y in range(3, 8):
+			area.append(Vector2i(x, y))
+	_clear(battle, area)
+	await physics_frame
+	g.add_blocker(vm, "vending", UiKit.sprite("cover_vending_machine"), true)
+	await physics_frame
+	await physics_frame
+	check(g.has_los(sh, tg), "step-out: Carol can lean around the vending machine in front of her")
+	g.add_blocker(Vector2i(3, 4), "crate", UiKit.sprite("cover_wooden_crate"), false)
+	g.add_blocker(Vector2i(3, 6), "crate", UiKit.sprite("cover_wooden_crate"), false)
+	check(not g.has_los(sh, tg), "no step-out room: the vending machine blocks the shot")
+	_clear(battle, [vm, Vector2i(3, 4), Vector2i(3, 6)])
+	await physics_frame
+
+	# --- Fog respects line of sight.
+	_park_enemies(battle, null)
+	var cc := Vector2i(3, 5)
+	battle.carol.place(cc, g.cell_to_world(cc))
+	g.add_blocker(Vector2i(5, 5), "vending", UiKit.sprite("cover_vending_machine"), true)
+	await physics_frame
+	await physics_frame
+	battle._update_fog()
+	check(g.is_cell_visible(Vector2i(4, 4)) and not g.is_cell_visible(Vector2i(7, 5)), "fog: tiles behind a vending machine stay hidden")
+	_clear(battle, [Vector2i(5, 5)])
+	await physics_frame
+	battle._update_fog()
+
+	# --- Dash.
+	battle.forced_roll = 1.0
+	battle._refresh_player_view()
+	check(battle.set_mode("dash"), "Dash mode starts")
+	var dash_to := Vector2i(-1, -1)
+	for c in battle.reachable_cells:
+		if battle.reachable_cells[c] == 2:
+			dash_to = c
+			break
+	check(dash_to.x >= 0 and battle.reachable_cells.size() <= 12, "Dash highlights tiles up to 2 away")
+	var dashed: bool = await battle.player_dash(dash_to)
+	check(dashed and battle.carol.cell == dash_to and battle.carol.ap == 3 and battle.carol.evasive, "Dash: 1 AP, 2 tiles, Carol evasive")
+	check(not battle.set_mode("dash"), "Dash only once per turn")
+
+	# --- Shove onto spikes, and into a wall.
+	var e = battle.enemies[0]
+	_park_enemies(battle, e)
+	var cpos := Vector2i(4, 5)
+	battle.carol.place(cpos, g.cell_to_world(cpos))
+	var epos := Vector2i(5, 5)
+	var dest := Vector2i(6, 5)
+	_clear(battle, [cpos, epos, dest, Vector2i(7, 5)])
+	e.place(epos, g.cell_to_world(epos))
+	e.hp = e.max_hp
+	g.add_hazard(dest, UiKit.sprite("hazard_spikes_iso"))
+	battle.carol.ap = 4
+	battle._update_fog()
+	battle._refresh_player_view()
+	var hp0: float = e.hp
+	var shoved: bool = await battle.player_shove(e)
+	check(shoved and e.cell == dest and e.hp <= hp0 - battle.ENEMY_SPIKE_DAMAGE + 0.01 and battle.carol.ap == 2, "Shove pushes a monster onto spikes (-%d HP, 2 AP)" % int(battle.ENEMY_SPIKE_DAMAGE))
+	# Into a wall.
+	var c2 := Vector2i(5, 5)
+	battle.carol.place(c2, g.cell_to_world(c2))
+	g.add_blocker(Vector2i(7, 5), "crate", UiKit.sprite("cover_wooden_crate"), false)
+	e.hp = e.max_hp
+	battle._refresh_player_view()
+	var shoved2: bool = await battle.player_shove(e)
+	check(shoved2 and e.cell == dest and e.hp < e.max_hp, "Shove into a wall: SLAM damage, monster stays put")
+	_clear(battle, [Vector2i(7, 5)])
+
+	# --- Enemies take spike damage when they walk onto spikes.
+	e.hp = e.max_hp
+	await battle.enemy_stepped(e)
+	check(is_equal_approx(e.hp, e.max_hp - battle.ENEMY_SPIKE_DAMAGE), "spike traps hurt monsters too")
+
+	# --- Intent badge + reveal lasts through Carol's next turn.
+	e.alerted = true
+	battle._update_intents()
+	check(e.intent == "attack" or e.intent == "move", "enemies show an intent (%s)" % e.intent)
+	battle.carol.evasive = false
+	await battle.enemy_attack(e)
+	check(e.revealed_until == battle.turn_number + 1, "an enemy that attacks stays revealed through Carol's next turn")
+
+	# --- Ranged AI picks a firing spot with cover.
+	var guard_data: EnemyData = gs.enemy_data("gated_community_guard")
+	e.data = guard_data
+	_clear(battle, area)
+	await physics_frame
+	var carol_spot := Vector2i(2, 5)
+	battle.carol.place(carol_spot, g.cell_to_world(carol_spot))
+	e.place(Vector2i(7, 3), g.cell_to_world(Vector2i(7, 3)))
+	g.add_blocker(Vector2i(5, 3), "crate", UiKit.sprite("cover_wooden_crate"), false)
+	await physics_frame
+	battle.forced_roll = 1.0
+	e.alerted = true
+	await battle.ai.act(e)
+	check(g.cover_between(carol_spot, e.cell) >= 1, "ranged AI moves to a firing spot in cover (%s)" % str(e.cell))
+
+	# --- Nailgun costs 1 AP per shot.
+	battle.carol.ap = 4
+	gs.give_weapon("nailgun")
+	gs.equipped_weapon = "nailgun"
+	battle.phase = battle.Phase.PLAYER
+	battle._update_fog()
+	e.revealed_until = battle.turn_number + 5
+	battle._refresh_player_view()
+	var shot: bool = await battle.player_attack(e)
+	check(shot and battle.carol.ap == 3, "Nailgun shot costs 1 AP")
+
+	# --- Audio assets and the pause menu.
+	var am := root.get_node("AudioManager")
+	var missing := []
+	for id in ["step", "swing", "hit", "miss", "shoot_water", "shoot_nail", "enemy_shoot", "enemy_death", "carol_hurt", "drink", "dash", "shove", "slam", "spikes", "pickup", "ui_click", "boss_intro", "boss_charge"]:
+		if not am.has_sfx(id):
+			missing.append(id)
+	for id in ["title", "earth", "air", "fire", "water", "boss", "victory", "defeat"]:
+		if not am.has_music(id):
+			missing.append(id)
+	check(missing.is_empty(), "all sound effects and music load %s" % str(missing))
+	am.play_music("earth")
+	check(am.current_music() == "earth", "music plays")
+	var pm := root.get_node("PauseMenu")
+	pm.open()
+	check(pm.is_open() and paused, "pause menu opens and pauses the game")
+	var v = pm.find_child("VersionLabel", true, false)
+	check(v != null and v.text.contains(gs.version()), "pause menu shows the release number")
+	pm.close()
+	check(not paused, "pause menu closes")
+	am.stop_music()
+
+	# --- Saves: atomic write, backup fallback, validation, permadeath.
+	gs.new_run(1, 321)
+	check(save.save_game(1) and not FileAccess.file_exists("user://test_saves/savegame.json.tmp"), "atomic save leaves no temp file")
+	check(int(gs.to_dict()["version"]) == 3, "save format version 3")
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("user://test_saves/savegame.json"), ProjectSettings.globalize_path("user://test_saves/savegame.json.bak"))
+	var f := FileAccess.open("user://test_saves/savegame.json", FileAccess.WRITE)
+	f.store_string("{ this is not json")
+	f.close()
+	check(not save.read_slot(1).is_empty(), "damaged save falls back to the backup copy")
+	save.wipe_save(1)
+	var d: Dictionary = gs.to_dict()
+	d["weapons"] = ["laser_cannon", "nailgun"]
+	d["equipped_weapon"] = "laser_cannon"
+	gs.from_dict(d)
+	check(gs.weapons == ["nailgun"] and gs.equipped_weapon == "nailgun", "unknown weapon ids in a save are dropped safely")
+	# EXTREME: every slot of the run is wiped; other runs survive.
+	gs.new_run(3, 777)
+	save.save_game(1)
+	save.save_game(2)
+	gs.new_run(1, 888)
+	save.save_game(3)
+	check(save.wipe_run(777) == 2 and not save.has_save(1) and not save.has_save(2) and save.has_save(3), "permadeath wipes every slot holding the run")
+	save.wipe_save(3)
+	# EXTREME: quitting mid-battle counts as a death.
+	gs.new_run(3, 999)
+	gs.active_slot = 1
+	gs.complete_node(gs.available_nodes()[0])
+	check(save.has_save(1), "EXTREME auto-saves after every node")
+	gs.begin_battle(gs.available_nodes()[0])
+	check(save.load_game(1) and save.last_load_was_flee and gs.run_seed != 999 and gs.realm == 0, "EXTREME: loading a save left mid-battle = permadeath, new run")
+	check(not save.has_save(1), "the fled run's save is gone")
+	save.wipe_save(1)

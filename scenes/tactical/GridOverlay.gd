@@ -11,6 +11,10 @@ var range_cells: Dictionary = {}
 var path: Array[Vector2i] = []
 var targets: Dictionary = {} # cell -> Color
 var hover_cell := Vector2i(-1, -1)
+## Dash mode draws the move tiles brighter and dashed so it reads as a different action.
+var dash_mode: bool = false
+## Tiles a charging boss will strike next turn (drawn as a red danger zone).
+var danger_cells: Dictionary = {}
 
 
 func clear_all() -> void:
@@ -19,6 +23,7 @@ func clear_all() -> void:
 	path.clear()
 	targets.clear()
 	hover_cell = Vector2i(-1, -1)
+	dash_mode = false
 	queue_redraw()
 
 
@@ -44,12 +49,20 @@ func _draw() -> void:
 		draw_colored_polygon(_diamond(c, 0.9), Color(PINK, 0.12))
 		_outline(c, Color(PINK, 0.35), 2.0)
 	for c in move_cells:
-		draw_colored_polygon(_diamond(c, 0.9), Color(CYAN, 0.2))
-		_outline(c, Color(CYAN, 0.55), 2.0)
+		if dash_mode:
+			draw_colored_polygon(_diamond(c, 0.9), Color(1.0, 1.0, 1.0, 0.18))
+			_outline(c, Color(CYAN, 0.95), 4.0)
+		else:
+			draw_colored_polygon(_diamond(c, 0.9), Color(CYAN, 0.2))
+			_outline(c, Color(CYAN, 0.55), 2.0)
 	for i in path.size():
 		if i == 0:
 			continue
 		draw_colored_polygon(_diamond(path[i], 0.55), Color(1.0, 0.9, 0.0, 0.6))
+	for c in danger_cells:
+		if grid.in_bounds(c):
+			draw_colored_polygon(_diamond(c, 0.95), Color(1.0, 0.1, 0.1, 0.32))
+			_outline(c, Color(1.0, 0.2, 0.1, 0.95), 4.0, 0.95)
 	for c in targets:
 		draw_colored_polygon(_diamond(c, 0.9), Color(targets[c], 0.18))
 		_outline(c, targets[c], 4.0)

@@ -74,9 +74,17 @@ func _ready() -> void:
 	_diff_buttons[selected_difficulty].button_pressed = true
 	new_btn.grab_focus()
 
+	# Release number, bottom-right.
+	var ver := UiKit.label(GameState.version_label(), 16, Color("#ffffff"))
+	ver.name = "VersionLabel"
+	ver.position = Vector2(1180, 690)
+	add_child(ver)
+	AudioManager.play_music("title")
+
 
 func _on_difficulty(i: int) -> void:
 	selected_difficulty = i
+	AudioManager.play_sfx("ui_click")
 	_blurb.text = GameState.DIFFICULTY_BLURBS[i]
 
 

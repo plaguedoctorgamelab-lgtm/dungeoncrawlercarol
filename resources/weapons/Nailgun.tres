@@ -9,10 +9,11 @@
 script = ExtResource("4_u0nnc")
 weapon_id = "nailgun"
 display_name = "Contractor Nailgun"
-damage = 16.0
+damage = 13.0
+ap_cost = 1
 is_ranged = true
 max_range_tiles = 7
 projectile_texture = ExtResource("3_51tb8")
 projectile = ExtResource("2_qdl3e")
 icon = ExtResource("1_pkf75")
-description = "Fast, long-range, union-certified."
+description = "Rapid-fire: only 1 AP per shot, so you can move AND shoot, or fire 4 times. Long-range, union-certified."

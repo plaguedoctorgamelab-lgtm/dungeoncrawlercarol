@@ -7,8 +7,8 @@
 script = ExtResource("1_5tq63")
 enemy_id = "bureaucrat_golem"
 display_name = "HOA President Golem"
-max_hp = 160.0
-base_damage = 24.0
+max_hp = 200.0
+base_damage = 32.0
 sight_radius_tiles = 8
 sprite_texture = ExtResource("2_w0mjs")
 role = "LEVEL 1 BOSS"

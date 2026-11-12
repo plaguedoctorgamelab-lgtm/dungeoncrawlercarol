@@ -30,6 +30,7 @@ func _ready() -> void:
 		GameState.autosave(true)
 	_build_ui()
 	refresh()
+	AudioManager.play_music(AudioManager.realm_track(GameState.realm))
 	if GameState.overworld_banner != "":
 		show_message(GameState.overworld_banner)
 		GameState.overworld_banner = ""
@@ -52,7 +53,7 @@ func _build_ui() -> void:
 	add_child(stat_box)
 	_hp_bar = ProgressBar.new()
 	_hp_bar.custom_minimum_size = Vector2(310, 26)
-	_hp_bar.max_value = GameState.CAROL_MAX_HP
+	_hp_bar.max_value = GameState.carol_max_hp()
 	_hp_bar.show_percentage = false
 	stat_box.add_child(_hp_bar)
 	_stats = UiKit.label("", 15)
@@ -143,7 +144,7 @@ func refresh() -> void:
 	for w in GameState.weapons:
 		weapon_names.append(Roster.weapon_name(w))
 	_stats.text = "Carol HP %d/%d   Energy Drinks: %d\nWeapons: %s\nDifficulty: %s   Node %d/%d" % [
-		int(GameState.carol_hp), int(GameState.CAROL_MAX_HP), GameState.energy_drinks,
+		int(GameState.carol_hp), int(GameState.carol_max_hp()), GameState.energy_drinks,
 		", ".join(weapon_names), GameState.DIFFICULTY_NAMES[GameState.difficulty],
 		GameState.visited.size(), GameState.map_data["nodes"].size()]
 	_save_btn.text = "SAVE / LOAD" if GameState.can_save_now() else "LOAD"
@@ -158,6 +159,7 @@ func show_message(text: String) -> void:
 func choose_node(id: int) -> void:
 	if _popup != null or not GameState.available_nodes().has(id):
 		return
+	AudioManager.play_sfx("ui_click")
 	match GameState.node_type(id):
 		"combat", "boss":
 			GameState.pending_node = id
@@ -174,6 +176,7 @@ func _resolve_hazard(id: int) -> void:
 	var roll := rng.randf()
 	var outcome := ""
 	GameState.complete_node(id)
+	AudioManager.play_sfx("spikes" if roll < 0.4 else "pickup")
 	if roll < 0.4:
 		var dmg := float(rng.randi_range(8, 18)) * GameState.enemy_dmg_scale()
 		GameState.carol_hp = maxf(1.0, GameState.carol_hp - dmg)
@@ -210,8 +213,12 @@ func _resolve_supply(id: int) -> void:
 			missing.append(w)
 	var text := ""
 	var icon: Texture2D
-	if not missing.is_empty() and GameState.rng.randf() < 0.6:
-		var w: String = missing[GameState.rng.randi_range(0, missing.size() - 1)]
+	# Realm 1's first cache always hands out the Squeaky Foam Mallet, so Carol has a heavy
+	# hitter before the HOA Golem.
+	var guaranteed := GameState.realm == 0 and missing.has("squeak_hammer")
+	AudioManager.play_sfx("pickup")
+	if guaranteed or (not missing.is_empty() and GameState.rng.randf() < 0.6):
+		var w: String = "squeak_hammer" if guaranteed else missing[GameState.rng.randi_range(0, missing.size() - 1)]
 		GameState.give_weapon(w)
 		var data := GameState.weapon_data(w)
 		text = "New weapon: %s!\n%s\n(Switch weapons in battle with keys 1-%d.)" % [data.display_name, data.description, GameState.weapons.size()]

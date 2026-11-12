@@ -9,8 +9,8 @@
 script = ExtResource("3_ti24j")
 enemy_id = "sea_lord_boss"
 display_name = "The Sea Lord"
-max_hp = 300.0
-base_damage = 40.0
+max_hp = 340.0
+base_damage = 44.0
 sight_radius_tiles = 10
 is_ranged = true
 projectile_texture = ExtResource("2_muhim")

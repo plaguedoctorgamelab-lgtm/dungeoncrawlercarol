@@ -6,6 +6,7 @@ config_version=5
 [application]
 
 config/name="Dungeon Crawler Carol: Lair of The Sea Lord"
+config/version="0.3.0"
 config/description="1990s cartoon HD isometric turn-based tactical RPG (V2)."
 run/main_scene="res://scenes/ui/TitleScreen.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
@@ -16,6 +17,8 @@ config/icon="res://icon.svg"
 SignalBus="*res://scripts/autoload/SignalBus.gd"
 GameState="*res://scripts/autoload/GameState.gd"
 SaveManager="*res://scripts/autoload/SaveManager.gd"
+AudioManager="*res://scripts/autoload/AudioManager.gd"
+PauseMenu="*res://scripts/autoload/PauseMenu.gd"
 
 [display]
 

@@ -1,7 +1,10 @@
+class_name TacticalBattlefield
 extends Node2D
 ## XCOM-style isometric tactical battle on a 128x64 grid under a fixed Camera2D: map
 ## generation, turn manager (Player Phase -> Enemy AI Phase), 4 AP economy, cover-based
-## hit chances, tweened projectiles, fog of war, victory/defeat flow.
+## hit chances, Carol's abilities (Dash, Shove), telegraphed enemy intents, tweened
+## projectiles, fog of war, juice (hit-stop, shake, sound) and victory/defeat flow.
+## Enemy decision-making lives in EnemyAI.gd.
 
 signal player_turn_started
 signal enemy_phase_finished
@@ -12,10 +15,19 @@ const ENEMY_SCENE := preload("res://scenes/units/EnemyUnit.tscn")
 const PENNY_SCENE := preload("res://scenes/units/PrincessPenny.tscn")
 const DROP_SCENE := preload("res://scenes/items/TacticalDrop.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/tactical/Projectile.tscn")
+const ENEMY_AI := preload("res://scenes/tactical/EnemyAI.gd")
 
 enum Phase { SETUP, PLAYER, BUSY, ENEMY, ENDED }
 
 const SPIKE_DAMAGE := 8.0
+## Spikes hurt monsters more (they get shoved onto them on purpose).
+const ENEMY_SPIKE_DAMAGE := 15.0
+## Damage when a shoved monster slams into something solid.
+const SLAM_DAMAGE := 10.0
+## A boss's telegraphed (charged) strike hits this much harder than a normal attack.
+const BOSS_STRIKE_MULT := 1.3
+## Dash makes the next enemy attack on Carol this much less likely to hit.
+const DASH_EVADE := 0.25
 const DROP_CHANCE := 0.3
 ## Room sizes (tiles). Regular rooms are 10x10 to 12x12; boss rooms are 12x12.
 const ROOM_MIN := 10
@@ -37,36 +49,49 @@ var node_id: int = -1
 var is_boss_battle: bool = false
 var turn_number: int = 0
 var rng := RandomNumberGenerator.new()
+## EnemyAI.gd instance (untyped so its methods resolve at runtime).
+var ai
 var reachable_cells: Dictionary = {}
 var hovered_cell := Vector2i(-1, -1)
+## "" (normal), "dash" or "shove": what the next click does.
+var mode: String = ""
+var dash_used: bool = false
 ## Tests set this to 0.0 (always hit) or 1.0 (always miss). Negative = random.
 var forced_roll: float = -1.0
 var ready_done: bool = false
+## Tests and the auto-play sim turn hit-stop off so time_scale stays predictable.
+var juice_enabled: bool = true
+var _hitstop_active: bool = false
 
 
 func _ready() -> void:
-	rng.randomize()
 	node_id = GameState.pending_node
+	# Seeded from the run, so the same run + node always builds the same room.
+	rng.seed = GameState.battle_seed(node_id)
 	is_boss_battle = node_id >= 0 and not GameState.map_data.is_empty() and GameState.is_boss_node(node_id)
 	overlay.grid = grid
+	ai = ENEMY_AI.new(self)
 	_build_map()
 	_spawn_units()
 	# Fixed, non-moving camera: the whole 10x10-12x12 room fits the 1920x1080 view at 1:1.
 	camera.position = grid.center_world() + CAMERA_NUDGE
 	camera.zoom = Vector2.ONE
 	hud.bind(self)
-	if node_id >= 0:
-		GameState.autosave(false)
+	GameState.begin_battle(node_id)
 	_update_fog()
 	var realm_name: String = Roster.REALM_NAMES[GameState.realm]
 	if is_boss_battle:
 		var boss := enemies[0]
 		SignalBus.say("BOSS: %s - \"%s\"" % [boss.display_name, boss.data.flavor_text], UiKit.YELLOW)
+		AudioManager.play_music("boss")
+		AudioManager.play_sfx("boss_intro")
 	else:
 		SignalBus.say("%s ambush! Smarmy squad incoming." % realm_name, UiKit.PINK)
+		AudioManager.play_music(AudioManager.realm_track(GameState.realm))
 	# Let the physics server register the LOS colliders before the first raycast.
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+	_update_fog()
 	ready_done = true
 	start_player_turn()
 
@@ -97,7 +122,7 @@ func _spawn_units() -> void:
 		var layer := 0
 		if node_id >= 0 and not GameState.map_data.is_empty():
 			layer = int(GameState.map_data["nodes"][node_id]["layer"])
-		var count := 2 + (1 if layer >= 2 else 0) + (1 if layer >= 5 else 0)
+		var count := 3 + (1 if layer >= 4 else 0)
 		if GameState.difficulty == GameState.Difficulty.EASY:
 			count = maxi(2, count - 1)
 		for i in mini(count, 4):
@@ -138,6 +163,7 @@ func _spawn_units() -> void:
 		if e.data.is_boss:
 			e.alerted = true
 		enemies.append(e)
+	carol.face(enemies[0].position)
 
 	if penny_cell.x >= 0:
 		penny = PENNY_SCENE.instantiate()
@@ -157,26 +183,43 @@ func _random_cell(min_x: int, max_x: int, avoid: Array[Vector2i]) -> Vector2i:
 	return Vector2i.ZERO
 
 
-## Cover objects and spike traps, keeping every walkable tile connected.
+## Cover is laid out as deliberate "fighting positions": small L- and line-shaped clusters
+## of crates and vending machines across the middle of the room, plus a few loose props,
+## so both sides regularly have cover to fight from. Every walkable tile stays connected.
 func _place_terrain(reserved: Array[Vector2i], start: Vector2i) -> void:
 	var crate: Texture2D = SpriteScaler.texture("cover_wooden_crate", "cover")
 	var vending: Texture2D = SpriteScaler.texture("cover_vending_machine", "cover")
 	var spikes: Texture2D = SpriteScaler.texture("hazard_spikes_iso", "item")
-	var wanted := int(rng.randi_range(12, 17) * float(grid.width * grid.height) / 144.0)
-	var placed := 0
+	var shapes: Array = [
+		[Vector2i(0, 0), Vector2i(1, 0)],
+		[Vector2i(0, 0), Vector2i(0, 1)],
+		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
+		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)],
+		[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2)],
+	]
+	var clusters := 4 + (1 if grid.width >= 12 else 0)
 	var tries := 0
-	while placed < wanted and tries < 300:
+	var made := 0
+	while made < clusters and tries < 120:
+		tries += 1
+		var anchor := Vector2i(rng.randi_range(2, grid.width - 4), rng.randi_range(1, grid.height - 3))
+		var shape: Array = shapes[rng.randi_range(0, shapes.size() - 1)]
+		var placed_any := false
+		for k in shape.size():
+			var c: Vector2i = anchor + shape[k]
+			# One vending machine (full cover) per cluster at most; the rest are crates.
+			var is_vending: bool = k == 0 and rng.randf() < 0.55
+			if _try_blocker(c, is_vending, reserved, start, crate, vending):
+				placed_any = true
+		if placed_any:
+			made += 1
+	var loose := rng.randi_range(2, 4)
+	tries = 0
+	while loose > 0 and tries < 100:
 		tries += 1
 		var c := Vector2i(rng.randi_range(0, grid.width - 1), rng.randi_range(0, grid.height - 1))
-		if reserved.has(c) or grid.blockers.has(c) or CombatMath.manhattan(c, start) <= 1:
-			continue
-		var is_vending := rng.randf() < 0.4
-		grid.add_blocker(c, "vending" if is_vending else "crate", vending if is_vending else crate, is_vending)
-		if grid.connected_count(start) != grid.walkable_count():
-			# Undo: would cut the map in two.
-			_remove_last_blocker(c)
-			continue
-		placed += 1
+		if _try_blocker(c, rng.randf() < 0.3, reserved, start, crate, vending):
+			loose -= 1
 	var spike_count := rng.randi_range(3, 6)
 	var s := 0
 	tries = 0
@@ -187,6 +230,16 @@ func _place_terrain(reserved: Array[Vector2i], start: Vector2i) -> void:
 			continue
 		grid.add_hazard(c, spikes)
 		s += 1
+
+
+func _try_blocker(c: Vector2i, is_vending: bool, reserved: Array[Vector2i], start: Vector2i, crate: Texture2D, vending: Texture2D) -> bool:
+	if not grid.in_bounds(c) or reserved.has(c) or grid.blockers.has(c) or CombatMath.manhattan(c, start) <= 1:
+		return false
+	grid.add_blocker(c, "vending" if is_vending else "crate", vending if is_vending else crate, is_vending)
+	if grid.connected_count(start) != grid.walkable_count():
+		_remove_last_blocker(c)
+		return false
+	return true
 
 
 func _remove_last_blocker(c: Vector2i) -> void:
@@ -267,6 +320,27 @@ func attack_range_cells() -> Dictionary:
 	return out
 
 
+## Tiles that charging bosses will strike next turn.
+func danger_zone() -> Dictionary:
+	var out := {}
+	for e in enemies:
+		if not e.is_dead():
+			for c in e.strike_zone():
+				out[c] = true
+	return out
+
+
+## Visible, alerted enemies that could hit Carol if she ended her turn on `cell`.
+func threats_at(cell: Vector2i) -> Array[EnemyUnit]:
+	var out: Array[EnemyUnit] = []
+	for e in enemies:
+		if e.is_dead() or not e.alerted or not is_enemy_targetable(e):
+			continue
+		if ai.threatens(e, cell):
+			out.append(e)
+	return out
+
+
 func is_ended() -> bool:
 	return phase == Phase.ENDED
 
@@ -286,8 +360,11 @@ func start_player_turn() -> void:
 		return
 	turn_number += 1
 	carol.ap = carol.max_ap
+	dash_used = false
+	mode = ""
 	phase = Phase.PLAYER
 	SignalBus.phase_changed.emit("PLAYER PHASE - TURN %d" % turn_number)
+	AudioManager.play_sfx("turn_player")
 	_refresh_player_view()
 	player_turn_started.emit()
 
@@ -296,28 +373,61 @@ func end_player_turn() -> void:
 	if phase != Phase.PLAYER:
 		return
 	phase = Phase.ENEMY
+	mode = ""
 	overlay.clear_all()
 	hud.update_all()
 	SignalBus.phase_changed.emit("ENEMY PHASE")
+	AudioManager.play_sfx("turn_enemy")
 	await _enemy_phase()
 	if phase != Phase.ENDED:
 		start_player_turn()
 
 
 func _refresh_player_view() -> void:
-	reachable_cells = grid.reachable(carol.cell, carol.ap, occupied_cells(carol)) if phase == Phase.PLAYER else {}
-	overlay.move_cells = reachable_cells
+	var player := phase == Phase.PLAYER
+	if player and mode == "dash":
+		reachable_cells = grid.reachable(carol.cell, GameState.DASH_TILES, occupied_cells(carol))
+	elif player:
+		reachable_cells = grid.reachable(carol.cell, carol.ap, occupied_cells(carol))
+	else:
+		reachable_cells = {}
+	overlay.move_cells = reachable_cells if mode != "shove" else {}
+	overlay.danger_cells = danger_zone()
+	overlay.dash_mode = mode == "dash"
 	overlay.targets.clear()
-	overlay.range_cells = attack_range_cells() if phase == Phase.PLAYER and carol.ap >= GameState.current_weapon().ap_cost else {}
-	if phase == Phase.PLAYER:
+	overlay.range_cells = attack_range_cells() if player and mode == "" and carol.ap >= GameState.current_weapon().ap_cost else {}
+	if player:
 		for e in enemies:
-			if is_enemy_targetable(e):
+			if not is_enemy_targetable(e):
+				continue
+			var col: Color
+			if mode == "shove":
+				col = UiKit.YELLOW if can_shove(e) else Color(1, 0.9, 0.2, 0.25)
+			else:
 				var chance := player_hit_chance(e)
-				var col := UiKit.PINK if chance > 0.0 and carol.ap >= GameState.current_weapon().ap_cost else Color(1, 0.4, 0.8, 0.4)
-				for c in e.footprint():
-					overlay.targets[c] = col
+				col = UiKit.PINK if chance > 0.0 and carol.ap >= GameState.current_weapon().ap_cost else Color(1, 0.4, 0.8, 0.4)
+			for c in e.footprint():
+				overlay.targets[c] = col
+	_update_intents()
 	_update_hover()
 	hud.update_all()
+
+
+## Each enemy shows what it will do next turn: attack Carol where she stands, move,
+## charge (bosses), or nothing yet (hasn't noticed her).
+func _update_intents() -> void:
+	for e in enemies:
+		if e.is_dead():
+			continue
+		if e.charged:
+			e.intent = "charge"
+		elif not e.alerted:
+			e.intent = "unaware"
+		elif ai.threatens(e, carol.cell):
+			e.intent = "attack"
+		else:
+			e.intent = "move"
+		e.queue_redraw()
 
 
 func _update_fog() -> void:
@@ -339,14 +449,47 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_hover()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		click_cell(grid.world_to_cell(get_global_mouse_position()))
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		if mode != "":
+			set_mode("")
 	elif event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_1, KEY_2, KEY_3, KEY_4:
 				equip_index(event.keycode - KEY_1)
 			KEY_H:
 				use_drink()
+			KEY_Q:
+				set_mode("" if mode == "dash" else "dash")
+			KEY_F:
+				set_mode("" if mode == "shove" else "shove")
+			KEY_ESCAPE:
+				if mode != "":
+					set_mode("")
+					get_viewport().set_input_as_handled()
 			KEY_E, KEY_SPACE, KEY_ENTER:
 				end_player_turn()
+
+
+func set_mode(m: String) -> bool:
+	if phase != Phase.PLAYER:
+		return false
+	if m == "dash":
+		if dash_used:
+			SignalBus.say("Dash already used this turn.", UiKit.RED)
+			return false
+		if carol.ap < GameState.DASH_AP:
+			SignalBus.say("Need %d AP to Dash." % GameState.DASH_AP, UiKit.RED)
+			return false
+		SignalBus.say("DASH: click a tile up to %d away (1 AP). Next enemy attack on Carol gets -25%%. Right-click to cancel." % GameState.DASH_TILES, UiKit.TEAL)
+	elif m == "shove":
+		if carol.ap < GameState.SHOVE_AP:
+			SignalBus.say("Need %d AP to Shove." % GameState.SHOVE_AP, UiKit.RED)
+			return false
+		SignalBus.say("SHOVE: click a monster next to Carol (2 AP). Push it onto spikes or out of cover! Right-click to cancel.", UiKit.YELLOW)
+	mode = m
+	AudioManager.play_sfx("ui_click")
+	_refresh_player_view()
+	return true
 
 
 func _update_hover() -> void:
@@ -355,25 +498,40 @@ func _update_hover() -> void:
 	var info := ""
 	var e := enemy_at(hovered_cell)
 	if is_enemy_targetable(e):
-		var w := GameState.current_weapon()
-		var t := e.nearest_cell(carol.cell)
-		var chance := player_hit_chance(e)
-		var why := ""
-		if not in_weapon_range(w, carol.cell, t):
-			why = "OUT OF RANGE"
-		elif chance <= 0.0:
-			why = "NO LINE OF SIGHT"
+		if mode == "shove":
+			SignalBus.hit_preview.emit(-1.0, "")
+			info = "Shove %s%s" % [e.display_name, "" if can_shove(e) else " - must be next to Carol (bosses can't be shoved)"]
 		else:
-			why = "MELEE" if not w.is_ranged else CombatMath.COVER_NAMES[attack_cover(carol.cell, t, true)]
-			if carol.ap < w.ap_cost:
-				why += " - need %d AP" % w.ap_cost
-		SignalBus.hit_preview.emit(chance, "%s  HP %d/%d  [%s]" % [e.display_name, int(e.hp), int(e.max_hp), why])
-		info = "%s - %s\n\"%s\"" % [e.display_name, e.data.role, e.data.flavor_text]
+			var w := GameState.current_weapon()
+			var t := e.nearest_cell(carol.cell)
+			var chance := player_hit_chance(e)
+			var why := ""
+			if not in_weapon_range(w, carol.cell, t):
+				why = "OUT OF RANGE"
+			elif chance <= 0.0:
+				why = "NO LINE OF SIGHT"
+			else:
+				why = "MELEE" if not w.is_ranged else CombatMath.COVER_NAMES[attack_cover(carol.cell, t, true)]
+				if carol.ap < w.ap_cost:
+					why += " - need %d AP" % w.ap_cost
+			SignalBus.hit_preview.emit(chance, "%s  HP %d/%d  [%s]" % [e.display_name, int(e.hp), int(e.max_hp), why])
+			info = "%s - %s\nNext turn: %s\n\"%s\"" % [e.display_name, e.data.role, EnemyUnit.INTENT_TEXT.get(e.intent, ""), e.data.flavor_text]
 	else:
 		SignalBus.hit_preview.emit(-1.0, "")
-		if reachable_cells.has(hovered_cell):
-			overlay.path = grid.find_path(carol.cell, hovered_cell, occupied_cells(carol))
-			info = "Move here: %d AP%s" % [reachable_cells[hovered_cell], "  (SPIKES! -%d HP)" % int(SPIKE_DAMAGE) if grid.hazards.has(hovered_cell) else ""]
+		if reachable_cells.has(hovered_cell) and mode != "shove":
+			overlay.path = grid.move_path(carol.cell, hovered_cell, GameState.DASH_TILES if mode == "dash" else carol.ap, occupied_cells(carol))
+			var cost: int = GameState.DASH_AP if mode == "dash" else reachable_cells[hovered_cell]
+			var threats := threats_at(hovered_cell)
+			var danger := "Safe from the monsters you can see." if threats.is_empty() else "DANGER: %d monster%s can hit you here." % [threats.size(), "" if threats.size() == 1 else "s"]
+			if danger_zone().has(hovered_cell):
+				danger = "RED ZONE: a charging boss strikes this tile next turn!  " + danger
+			var best_cover := 0
+			for t in threats:
+				if t.data.is_ranged:
+					best_cover = maxi(best_cover, grid.cover_between(t.nearest_cell(hovered_cell), hovered_cell))
+			if not threats.is_empty():
+				danger += "  Your cover: %s." % CombatMath.COVER_NAMES[best_cover]
+			info = "%s here: %d AP%s\n%s" % ["Dash" if mode == "dash" else "Move", cost, "  (SPIKES! -%d HP)" % int(SPIKE_DAMAGE) if grid.hazards.has(hovered_cell) else "", danger]
 	hud.set_hover_info(info)
 	overlay.queue_redraw()
 
@@ -382,6 +540,14 @@ func click_cell(c: Vector2i) -> void:
 	if phase != Phase.PLAYER:
 		return
 	var e := enemy_at(c)
+	if mode == "shove":
+		if e != null and is_enemy_targetable(e):
+			await player_shove(e)
+		return
+	if mode == "dash":
+		if reachable_cells.has(c):
+			await player_dash(c)
+		return
 	if is_enemy_targetable(e):
 		await player_attack(e)
 	elif reachable_cells.has(c):
@@ -393,6 +559,7 @@ func equip_index(i: int) -> void:
 		GameState.equipped_weapon = GameState.weapons[i]
 		SignalBus.say("Equipped %s." % GameState.current_weapon().display_name, UiKit.TEAL)
 		SignalBus.inventory_changed.emit()
+		AudioManager.play_sfx("ui_click")
 		if phase == Phase.PLAYER:
 			_refresh_player_view()
 
@@ -400,14 +567,15 @@ func equip_index(i: int) -> void:
 # ------------------------------------------------------------------ player actions
 
 func player_move(target: Vector2i) -> bool:
-	if phase != Phase.PLAYER or not reachable_cells.has(target):
+	if phase != Phase.PLAYER or mode != "" or not reachable_cells.has(target):
 		return false
-	var path := grid.find_path(carol.cell, target, occupied_cells(carol))
+	var path := grid.move_path(carol.cell, target, carol.ap, occupied_cells(carol))
 	if path.size() < 2 or path[path.size() - 1] != target or path.size() - 1 > carol.ap:
 		return false
 	phase = Phase.BUSY
 	overlay.clear_all()
 	for i in range(1, path.size()):
+		AudioManager.play_sfx("step")
 		await carol.step_to(path[i], grid.cell_to_world(path[i]))
 		carol.ap -= 1
 		_after_carol_step()
@@ -418,16 +586,91 @@ func player_move(target: Vector2i) -> bool:
 	return true
 
 
+## Dash: once per turn, 1 AP to move up to 2 tiles. The next enemy attack on Carol gets -25%.
+func player_dash(target: Vector2i) -> bool:
+	if phase != Phase.PLAYER or dash_used or carol.ap < GameState.DASH_AP:
+		return false
+	var path := grid.move_path(carol.cell, target, GameState.DASH_TILES, occupied_cells(carol))
+	if path.size() < 2 or path[path.size() - 1] != target:
+		return false
+	phase = Phase.BUSY
+	mode = ""
+	overlay.clear_all()
+	dash_used = true
+	carol.ap -= GameState.DASH_AP
+	carol.evasive = true
+	AudioManager.play_sfx("dash")
+	for i in range(1, path.size()):
+		await carol.dash_to(path[i], grid.cell_to_world(path[i]))
+		_after_carol_step()
+		if phase == Phase.ENDED:
+			return true
+	SignalBus.say("Carol DASHES! The next attack on her is 25% less likely to hit.", UiKit.TEAL)
+	phase = Phase.PLAYER
+	_refresh_player_view()
+	return true
+
+
+func can_shove(e: EnemyUnit) -> bool:
+	return e != null and not e.is_dead() and e.size_cells == 1 and CombatMath.manhattan(e.cell, carol.cell) == 1 and carol.ap >= GameState.SHOVE_AP
+
+
+## Shove: 2 AP, push an adjacent (non-boss) monster one tile straight away from Carol.
+## Spikes deal 15, slamming into something solid deals 10, and it loses any cover it had.
+func player_shove(e: EnemyUnit) -> bool:
+	if phase != Phase.PLAYER or not can_shove(e):
+		return false
+	phase = Phase.BUSY
+	mode = ""
+	overlay.clear_all()
+	carol.ap -= GameState.SHOVE_AP
+	SignalBus.ap_changed.emit(carol.ap, carol.max_ap)
+	await carol.play_shove(e.position)
+	var dir := e.cell - carol.cell
+	var dest := e.cell + dir
+	var blocked := not grid.is_walkable(dest) or occupied_cells(e).has(dest)
+	if blocked:
+		AudioManager.play_sfx("slam")
+		var dmg := SLAM_DAMAGE * GameState.carol_damage_mult()
+		_popup(e, "SLAM -%d" % int(dmg), UiKit.YELLOW)
+		SignalBus.say("Carol slams %s into the wall for %d!" % [e.display_name, int(dmg)], UiKit.YELLOW)
+		await e.lunge(grid.cell_to_world(dest))
+		shake(6.0)
+		e.take_damage(dmg)
+	else:
+		AudioManager.play_sfx("shove")
+		await e.step_to(dest, grid.cell_to_world(dest))
+		SignalBus.say("Carol shoves %s back!" % e.display_name, UiKit.YELLOW)
+		await enemy_stepped(e, ENEMY_SPIKE_DAMAGE)
+	if phase == Phase.BUSY:
+		phase = Phase.PLAYER
+		_refresh_player_view()
+	return true
+
+
 func _after_carol_step() -> void:
 	_update_fog()
 	SignalBus.ap_changed.emit(carol.ap, carol.max_ap)
 	for d in drops.duplicate():
 		if is_instance_valid(d) and d.cell == carol.cell:
 			drops.erase(d)
+			AudioManager.play_sfx("pickup")
 			SignalBus.say(d.collect(), UiKit.GREEN)
 			SignalBus.inventory_changed.emit()
 	if grid.hazards.has(carol.cell):
-		_damage_carol(SPIKE_DAMAGE, "Spike trap! Carol takes %d damage." % int(SPIKE_DAMAGE))
+		AudioManager.play_sfx("spikes")
+		_damage_carol(SPIKE_DAMAGE, "Spike trap! Carol takes %d damage." % int(SPIKE_DAMAGE), carol.position)
+
+
+## Called after an enemy steps (or is shoved) onto a tile: spike traps hurt monsters too.
+func enemy_stepped(e: EnemyUnit, spike_damage: float = ENEMY_SPIKE_DAMAGE) -> void:
+	if e.is_dead() or not grid.hazards.has(e.cell):
+		return
+	AudioManager.play_sfx("spikes")
+	if e.visible:
+		_popup(e, "-%d" % int(spike_damage), UiKit.YELLOW)
+		SignalBus.say("%s lands on the spikes! -%d HP" % [e.display_name, int(spike_damage)], UiKit.YELLOW)
+	e.take_damage(spike_damage)
 
 
 func player_attack(e: EnemyUnit) -> bool:
@@ -449,21 +692,37 @@ func player_attack(e: EnemyUnit) -> bool:
 	overlay.clear_all()
 	carol.ap -= w.ap_cost
 	SignalBus.ap_changed.emit(carol.ap, carol.max_ap)
-	if not w.is_ranged:
-		carol.lunge(e.position)
+	AudioManager.play_sfx(_weapon_sfx(w))
+	await carol.play_attack(e.position, not w.is_ranged)
 	await _fire(carol, e, w.projectile, w.projectile_tint)
 	if _roll() < chance:
 		var dmg := w.damage * GameState.carol_damage_mult() * rng.randf_range(0.9, 1.1) * (1.0 - e.data.damage_reduction)
 		_popup(e, "-%d" % int(dmg), UiKit.YELLOW)
 		SignalBus.say("%s hits %s for %d! (%d%%)" % [w.display_name, e.display_name, int(dmg), int(chance * 100)], Color.WHITE)
+		AudioManager.play_sfx("hit")
+		shake(4.0 if w.is_ranged else 7.0)
+		hitstop(0.07)
 		e.take_damage(dmg)
 	else:
+		AudioManager.play_sfx("miss")
 		_popup(e, "MISS!", Color("#bbbbbb"))
 		SignalBus.say("Carol misses %s. (%d%% chance)" % [e.display_name, int(chance * 100)], Color("#bbbbbb"))
 	if phase == Phase.BUSY:
 		phase = Phase.PLAYER
 		_refresh_player_view()
 	return true
+
+
+func _weapon_sfx(w: WeaponData) -> String:
+	match w.weapon_id:
+		"super_soaker":
+			return "shoot_water"
+		"nailgun":
+			return "shoot_nail"
+		"squeak_hammer":
+			return "squeak"
+		_:
+			return "swing"
 
 
 func use_drink() -> bool:
@@ -479,6 +738,8 @@ func use_drink() -> bool:
 	carol.ap -= GameState.DRINK_AP
 	carol.heal(GameState.DRINK_HEAL)
 	GameState.carol_hp = carol.hp
+	AudioManager.play_sfx("drink")
+	carol.play_drink()
 	_popup(carol, "+%d" % int(GameState.DRINK_HEAL), UiKit.GREEN)
 	SignalBus.say("RADICAL! Carol chugs an Energy Drink (+%d HP)." % int(GameState.DRINK_HEAL), UiKit.GREEN)
 	SignalBus.hp_changed.emit(carol.hp, carol.max_hp)
@@ -487,7 +748,7 @@ func use_drink() -> bool:
 	return true
 
 
-# ------------------------------------------------------------------ enemy AI
+# ------------------------------------------------------------------ enemy phase
 
 func _enemy_phase() -> void:
 	for e in enemies.duplicate():
@@ -495,123 +756,58 @@ func _enemy_phase() -> void:
 			return
 		if e.is_dead():
 			continue
-		await _enemy_act(e)
+		await ai.act(e)
 		if carol.is_dead():
 			return
 	enemy_phase_finished.emit()
 
 
-func _enemy_act(e: EnemyUnit) -> void:
-	e.ap = e.max_ap
-	if not e.alerted:
-		if CombatMath.distance(e.nearest_cell(carol.cell), carol.cell) <= e.data.sight_radius_tiles:
-			e.alerted = true
-			if e.visible:
-				SignalBus.say("%s spotted Carol!" % e.display_name, UiKit.PINK)
-		else:
-			return
-	var attacked := false
-	var guard := 0
-	while e.ap > 0 and guard < 12 and phase != Phase.ENDED:
-		guard += 1
-		if not attacked and e.ap >= 2 and enemy_can_attack(e):
-			await _enemy_attack(e)
-			e.ap -= 2
-			attacked = true
-			if carol.is_dead():
-				return
-			continue
-		if attacked:
-			break
-		var moved := await _enemy_step(e)
-		e.ap -= 1
-		if not moved:
-			break
-
-
-func enemy_can_attack(e: EnemyUnit) -> bool:
-	var from := e.nearest_cell(carol.cell)
-	if not e.data.is_ranged:
-		return CombatMath.manhattan(from, carol.cell) == 1
-	return CombatMath.distance(from, carol.cell) <= e.data.attack_range_tiles + 0.01 and grid.has_los(from, carol.cell)
-
-
-## Moves up to `tiles_per_ap` tiles toward Carol. Returns true if the unit moved.
-func _enemy_step(e: EnemyUnit) -> bool:
-	if e.size_cells > 1:
-		return await _boss_step(e)
-	var moved := false
-	for k in maxi(1, e.data.tiles_per_ap):
-		if k > 0 and enemy_can_attack(e):
-			break
-		var path := grid.find_path(e.cell, carol.cell, occupied_cells(e))
-		if path.size() < 2:
-			break
-		var next: Vector2i = path[1]
-		if next == carol.cell or occupied_cells(e).has(next):
-			break
-		var seen := grid.is_cell_visible(e.cell) or grid.is_cell_visible(next)
-		e.visible = seen
-		await e.step_to(next, grid.cell_to_world(next), seen)
-		moved = true
-		e.visible = is_enemy_targetable(e)
-	return moved
-
-
-## 2x2 bosses shuffle one tile at a time toward Carol, keeping the whole block on free tiles.
-func _boss_step(e: EnemyUnit) -> bool:
-	var others := occupied_cells(e)
-	var best := e.cell
-	var best_d := CombatMath.manhattan(e.nearest_cell(carol.cell), carol.cell)
-	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var anchor: Vector2i = e.cell + d
-		var ok := true
-		for dy in e.size_cells:
-			for dx in e.size_cells:
-				var c: Vector2i = anchor + Vector2i(dx, dy)
-				if not grid.is_walkable(c) or others.has(c):
-					ok = false
-		if not ok:
-			continue
-		var near := Vector2i(clampi(carol.cell.x, anchor.x, anchor.x + e.size_cells - 1), clampi(carol.cell.y, anchor.y, anchor.y + e.size_cells - 1))
-		var dist := CombatMath.manhattan(near, carol.cell)
-		if dist < best_d:
-			best_d = dist
-			best = anchor
-	if best == e.cell:
-		return false
-	await e.step_to(best, unit_world(e, best), e.visible)
-	e.visible = is_enemy_targetable(e)
-	return true
-
-
-func _enemy_attack(e: EnemyUnit) -> void:
+## Used by the enemy AI to resolve one attack on Carol.
+func enemy_attack(e: EnemyUnit) -> void:
 	var was_hidden := not e.visible
 	e.visible = true
-	e.revealed_until = turn_number
+	# Stays visible through Carol's next turn so she can answer it.
+	e.revealed_until = turn_number + 1
 	if was_hidden:
 		SignalBus.say("An attack from the darkness! It's %s!" % e.display_name, UiKit.PINK)
-	var chance := attack_chance(e.nearest_cell(carol.cell), carol.cell, e.data.is_ranged)
+	var from := e.nearest_cell(carol.cell)
+	var chance := attack_chance(from, carol.cell, e.data.is_ranged)
+	var evaded := carol.evasive
+	if evaded:
+		chance = maxf(0.05, chance - DASH_EVADE)
+		carol.evasive = false
+	carol.face(e.position)
 	if e.data.is_ranged:
+		AudioManager.play_sfx("enemy_shoot")
 		await _fire(e, carol, e.data.projectile, Color.WHITE)
 	else:
+		AudioManager.play_sfx("enemy_swing")
 		await e.lunge(carol.position)
 	if _roll() < chance:
 		var dmg := e.attack_damage() * rng.randf_range(0.9, 1.1)
-		_damage_carol(dmg, "%s hits Carol for %d! (%d%%)" % [e.display_name, int(dmg), int(chance * 100)])
+		if e.data.is_boss:
+			dmg *= BOSS_STRIKE_MULT
+			hitstop(0.12)
+		_damage_carol(dmg, "%s hits Carol for %d! (%d%%)" % [e.display_name, int(dmg), int(chance * 100)], e.position)
 	else:
-		_popup(carol, "MISS!", Color("#bbbbbb"))
-		SignalBus.say("%s misses! (%d%% chance)" % [e.display_name, int(chance * 100)], Color("#bbbbbb"))
+		AudioManager.play_sfx("miss")
+		_popup(carol, "DODGED!" if evaded else "MISS!", Color("#bbbbbb"))
+		carol.play_dodge(e.position)
+		SignalBus.say("%s misses! (%d%% chance%s)" % [e.display_name, int(chance * 100), ", dash bonus" if evaded else ""], Color("#bbbbbb"))
 
 
-func _damage_carol(dmg: float, text: String) -> void:
+func _damage_carol(dmg: float, text: String, from_pos: Vector2) -> void:
 	carol.take_damage(dmg)
 	GameState.carol_hp = carol.hp
+	AudioManager.play_sfx("carol_hurt")
+	shake(9.0)
 	_popup(carol, "-%d" % int(dmg), UiKit.RED)
 	SignalBus.say(text, UiKit.RED)
 	SignalBus.hp_changed.emit(carol.hp, carol.max_hp)
 	if carol.is_dead():
 		_defeat()
+	else:
+		carol.play_hurt(from_pos)
 
 
 # ------------------------------------------------------------------ effects
@@ -629,6 +825,29 @@ func _popup(unit: Node2D, text: String, color: Color) -> void:
 	hud.popup_text(screen, text, color)
 
 
+## Brief freeze-frame on big hits so they land with weight.
+func hitstop(seconds: float) -> void:
+	if not juice_enabled or _hitstop_active or not is_inside_tree():
+		return
+	_hitstop_active = true
+	var prev := Engine.time_scale
+	Engine.time_scale = prev * 0.05
+	await get_tree().create_timer(seconds, true, false, true).timeout
+	Engine.time_scale = prev
+	_hitstop_active = false
+
+
+## Camera shake (the HUD stays still because it lives on its own CanvasLayer).
+func shake(strength: float) -> void:
+	if not juice_enabled or not is_inside_tree() or not AudioManager.screen_shake:
+		return
+	var tw := create_tween()
+	for i in 6:
+		var k := strength * (1.0 - i / 6.0)
+		tw.tween_property(camera, "offset", Vector2(rng.randf_range(-k, k), rng.randf_range(-k, k)), 0.03)
+	tw.tween_property(camera, "offset", Vector2.ZERO, 0.04)
+
+
 # ------------------------------------------------------------------ outcomes
 
 func _on_enemy_died(u: BattleUnit) -> void:
@@ -636,14 +855,13 @@ func _on_enemy_died(u: BattleUnit) -> void:
 	enemies.erase(e)
 	GameState.enemies_defeated += 1
 	SignalBus.say("%s has been DOWNSIZED!" % e.display_name, UiKit.YELLOW)
+	AudioManager.play_sfx("enemy_death")
 	if not e.data.is_boss and rng.randf() < DROP_CHANCE:
 		var d: Node2D = DROP_SCENE.instantiate()
 		grid.objects.add_child(d)
 		d.setup(e.cell, grid.cell_to_world(e.cell))
 		drops.append(d)
-	var tw := e.create_tween()
-	tw.tween_property(e, "modulate:a", 0.0, 0.3)
-	tw.tween_callback(e.queue_free)
+	e.play_death()
 	if enemies.is_empty():
 		_victory()
 
@@ -652,6 +870,7 @@ func _victory() -> void:
 	if phase == Phase.ENDED:
 		return
 	phase = Phase.ENDED
+	mode = ""
 	overlay.clear_all()
 	for d in drops:
 		if is_instance_valid(d):
@@ -661,14 +880,19 @@ func _victory() -> void:
 	GameState.carol_hp = carol.hp
 	battle_ended.emit(true)
 	SignalBus.battle_finished.emit(true)
+	AudioManager.play_music("victory", false)
+	carol.play_victory()
 	if is_boss_battle and GameState.realm == GameState.REALM_COUNT - 1:
 		SignalBus.say("The Sea Lord is defeated! The cage is cracking!", UiKit.PINK)
 		if penny:
+			AudioManager.play_sfx("cage_break")
 			await penny.break_cage()
+		GameState.battle_in_progress = -1
 		hud.show_result("PRINCESS PENNY RESCUED!", "The Sea Lord's boardroom cage shatters. Penny high-fives Carol and fires up a REAL espresso machine.", [["VICTORY!", _go_victory]])
 	elif is_boss_battle:
 		var next := GameState.realm + 1
-		hud.show_result("REALM CLEARED!", "%s is free of smarmy management. Next stop: %s.\nCarol is fully healed and hits harder." % [Roster.REALM_NAMES[GameState.realm], Roster.REALM_NAMES[next]], [["ONWARD!", _go_next_realm]])
+		GameState.battle_in_progress = -1
+		hud.show_result("REALM CLEARED!", "%s is free of smarmy management. Next stop: %s.\nCarol is fully healed, gains +%d max HP and hits harder." % [Roster.REALM_NAMES[GameState.realm], Roster.REALM_NAMES[next], int(GameState.CAROL_HP_PER_REALM)], [["ONWARD!", _go_next_realm]])
 	else:
 		GameState.heal(GameState.VICTORY_HEAL)
 		if node_id >= 0:
@@ -680,13 +904,19 @@ func _defeat() -> void:
 	if phase == Phase.ENDED:
 		return
 	phase = Phase.ENDED
+	mode = ""
 	overlay.clear_all()
 	GameState.carol_hp = 0.0
 	battle_ended.emit(false)
 	SignalBus.battle_finished.emit(false)
+	AudioManager.play_music("defeat", false)
+	carol.play_death()
 	if GameState.is_permadeath():
+		# Wipe every slot holding this run, so a copy in another slot can't dodge it.
+		SaveManager.wipe_run(GameState.run_seed)
 		SaveManager.wipe_save(GameState.active_slot)
-		hud.show_result("PERMADEATH!", "Carol got permanently downsized. Your EXTREME save file has been wiped.\nThe run restarts at Level 1.", [["RESTART AT LEVEL 1", _restart_run], ["TITLE SCREEN", _go_title]])
+		GameState.battle_in_progress = -1
+		hud.show_result("PERMADEATH!", "Carol got permanently downsized. Every save of this EXTREME run has been wiped.\nThe run restarts at Level 1.", [["RESTART AT LEVEL 1", _restart_run], ["TITLE SCREEN", _go_title]])
 	else:
 		var buttons: Array = []
 		if SaveManager.has_save(GameState.active_slot):

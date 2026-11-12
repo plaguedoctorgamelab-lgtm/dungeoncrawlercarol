@@ -18,6 +18,7 @@ func _ready() -> void:
 	add_child(art)
 	art.modulate.a = 0.0
 	create_tween().tween_property(art, "modulate:a", 1.0, 1.2)
+	AudioManager.play_music("victory", false)
 
 	var panel := PanelContainer.new()
 	panel.position = Vector2(340, 560)

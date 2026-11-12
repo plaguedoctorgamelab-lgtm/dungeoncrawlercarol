@@ -1,0 +1,248 @@
+STUDIO POST-BUILD AUDIT: DUNGEON CRAWLER CAROL: LAIR OF THE SEA LORD
+Build: commit 78e1a73 (V2 HD overhaul), Godot 4.7.2. Audit date: 2026-11-12.
+
+SCOPE AND METHOD
+- I read project.godot, docs/game_design_document.md, docs/master_graphics_asset_manifest.md, all scripts in scripts/ and scenes/, and the generated resources (24 enemies, 4 weapons, 15 projectiles).
+- Boot check: "godot --headless --quit" exits 0 with no warnings or parse errors.
+- Test suite: scripts/tests/run_unit_tests.gd gives 152 checks and 0 failures.
+- I wrote a new probe script, scripts/tools/audit_probe.gd (local only, not on GitHub). It ran across 40 generated rooms and 200 generated maps, and the numbers in this report come from it. It measured:
+  - whether the tiles shown as reachable match the real path cost
+  - how often ranged shots involve cover
+  - fog of war compared with line of sight
+  - how long the per-turn refresh takes
+  - balance tables for every difficulty and realm
+  - overworld pacing
+- Note: your brief asks for four department leads but only defines two before it cuts off: the Lead Technical Architect and the Lead Tactical Game Designer. I reviewed those two. Each of them evaluated the game twice: Pass 1 is a read of the code and data, and Pass 2 checks Pass 1 against the probe results.
+- The design doc lives at docs/game_design_document.md, not GDD.md in the project root as the brief assumes.
+
+======================================================================
+1. LEAD TECHNICAL ARCHITECT
+======================================================================
+
+--- PASS 1: CODE AND CONFIG READ ---
+
+WHAT WORKS WELL
+- Display config is correct. project.godot sets these:
+  - 1920x1080 viewport (lines 22-23)
+  - window/size/mode=3, which is windowed fullscreen, not exclusive (line 24)
+  - canvas_items stretch with keep aspect (lines 25-26)
+  - linear default texture filter (line 42)
+  - MSDF fonts (line 30)
+- The F11 toggle is in GameState._input (scripts/autoload/GameState.gd:64-76). It calls set_input_as_handled() and the autoload uses PROCESS_MODE_ALWAYS, so it works on every screen, including paused ones.
+- The isometric grid is set up correctly:
+  - IsometricGrid.CELL = Vector2i(128, 64) (scenes/tactical/IsometricGrid.gd:8).
+  - Both the floor and fog TileSets use TILE_SHAPE_ISOMETRIC with TILE_LAYOUT_DIAMOND_DOWN (lines 62, 83).
+  - All coordinate math goes through ground.map_to_local / local_to_map. There is no hand-rolled isometric math to drift out of sync.
+- SpriteScaler does what the spec asks. SpriteScaler.fit (scripts/util/SpriteScaler.gd:22-33):
+  - uses one uniform scale, min(footprint.x/w, footprint.y/h), so sprites are never distorted
+  - anchors the sprite bottom-center with offset.y = -h/2 + sink/s (line 30)
+  - the test suite confirms a raw 512x512 texture lands at exactly 128, 256 or 56 px
+  - missing PNGs fall back to procedural placeholders through SpriteScaler.texture()
+- Boss footprint is cleanly modelled. BattleUnit.size_cells, footprint(), occupies() and nearest_cell() (scenes/units/BattleUnit.gd:20-45) give 2x2 bosses correct occupancy, targeting, range and line of sight. No special cases are scattered through the battle code.
+- The enemy turn loop can't hang:
+  - _enemy_act is capped at "guard < 12" (TacticalBattlefield.gd:515)
+  - every move or attack consumes AP or breaks out of the loop
+  - _boss_step returns false when it's blocked (line 562 onward)
+  - every await is on a tween that always finishes
+- The save format is defensive. SaveManager.read_slot handles corrupt JSON by returning {} (scripts/autoload/SaveManager.gd:42). GameState._normalize_map turns JSON floats back into ints.
+
+CRITICAL ISSUES AND RISKS
+1. Cyan tiles can't always be reached (a correctness bug).
+   - IsometricGrid.reachable() (line 218) is an unweighted BFS.
+   - add_hazard() gives spike tiles weight 5.0 in the AStarGrid2D (line 175).
+   - player_move() uses that weighted A* path and rejects any path longer than Carol's AP (TacticalBattlefield.gd:406).
+   - Result: a tile can be highlighted as reachable, but clicking it silently does nothing because A* detours around the spikes.
+2. Shots go through vending machines next to the shooter.
+   - has_los() exempts every line-of-sight body next to EITHER end of the shot (IsometricGrid.gd:244-247).
+   - If Carol stands directly behind a vending machine on the firing line, she shoots straight through it, and so do enemies.
+   - The exemption is meant to let a unit "peek" out of its own cover, but it isn't limited to tiles beside the firing line.
+3. Fog of war ignores line of sight.
+   - update_fog() reveals every tile within a radius (IsometricGrid.gd:276), so Carol sees through vending machines.
+   - Enemy detection (TacticalBattlefield.gd:507) is also distance-only.
+4. Permadeath has two loopholes. _defeat() wipes only GameState.active_slot (TacticalBattlefield.gd:688).
+   - Loophole A: an EXTREME run saved to another slot survives the wipe. SaveMenu lets you save to any of the 3 slots at a level start.
+   - Loophole B: EXTREME only auto-saves at level start. A player who quits the game before the killing blow and reloads skips permadeath entirely.
+5. Save writes are not atomic. save_game() opens the live file for WRITE and streams into it (SaveManager.gd:27-37). A crash or power loss mid-write leaves a truncated file. read_slot() treats that as an empty slot, which on EXTREME is indistinguishable from a wipe.
+6. Loaded saves aren't validated. from_dict() restores equipped_weapon from JSON with no check that the weapon still exists (GameState.gd:250).
+   - A save edited by hand, or written by a future build with renamed weapons, gives weapon_data() == null.
+   - The first current_weapon().ap_cost read then crashes the battle.
+   - The save "version" field is still 2 after the V2 schema change.
+
+ARCHITECTURE NOTES (lower severity)
+- "Signals up, methods down" is mostly followed:
+  - The battle emits through SignalBus (hp_changed, ap_changed, hit_preview, phase_changed).
+  - The HUD calls battle methods directly.
+  - But TacticalHUD holds "var battle: Node2D" (scenes/ui/TacticalHUD.gd:4) and calls battle.use_drink(), battle.enemies and so on untyped. TacticalBattlefield has no class_name, so none of that is checked by the type system.
+- The autoloads depend on each other in a cycle:
+  - GameState.autosave() reaches SaveManager through get_node_or_null("/root/SaveManager") (GameState.gd:151).
+  - SaveManager calls GameState.to_dict().
+  - It works because both are autoloads, but it's hidden coupling.
+- Two scene nodes don't do what their names suggest:
+  - y_sort_enabled on the TacticalBattlefield root (TacticalBattlefield.tscn:9) has no effect. Its children are a CanvasLayer, Grid, Camera2D and the HUD. The sorting that matters is on Grid/Objects (line 39), where units, props and projectiles live.
+  - Grid/Effects (line 41, IsometricGrid.gd:20) is now unused because projectiles moved to Objects.
+- 2x2 boss depth-sort ties: a boss's position is the centre of its 2x2 block, so a unit on certain diagonal tiles (for example anchor+(2,-1)) has exactly the same y and draws in tree order.
+- UiKit.fit_design (scripts/ui/UiKit.gd:70-78) scales the 1280x720 UI layouts by a factor from ProjectSettings, not from the live viewport. That's fine under "keep" stretch, but it will break if anyone changes the stretch mode.
+
+SPECIFIC RECOMMENDATIONS
+- Make reachable() use the same costs as the A*. Either run Dijkstra with the hazard weight, or keep the BFS and stop weighting spikes in the A*. Then add a test asserting that every cyan tile's path cost is within Carol's AP.
+- In has_los(), only exempt cover next to the shooter if that cover isn't on the direct line, or pick an explicit "step-out" tile beside it the way XCOM does.
+- Give fog of war and enemy detection the same RayCast2D line-of-sight check that shooting uses. update_fog() can call has_los() for every tile in the radius at almost no cost (see Pass 2 timings).
+- Fix permadeath:
+  - write the EXTREME save after every completed node, so quitting doesn't help
+  - tag saves with the run_seed and wipe every slot that holds the same run on death
+  - write saves to a temp file, then rename it into place (DirAccess.rename)
+- Validate weapons and equipped_weapon against Roster in from_dict(), and bump the save version to 3.
+- Add class_name TacticalBattlefield and type TacticalHUD.battle. Delete the Grid/Effects node, and either drop the root y_sort flag or document it as cosmetic.
+
+--- PASS 2: RUNTIME VERIFICATION (audit_probe.gd + test runner) ---
+
+What the probes confirmed:
+- Issue 1, unreachable cyan tiles: confirmed.
+  - Across 40 rooms there were 1,083 reachable tiles, and 8 of them (0.7%) had a weighted A* path longer than Carol's AP.
+  - Clicking those 8 silently fails.
+  - That's rare, but it happens most often right next to spike traps, which is exactly where a player is watching closely.
+  - I'm raising it from "edge case" to "ship blocker for feel".
+- Issue 3, fog: confirmed. Of 2,830 tiles shown as visible, 285 (10.1%) are not in line of sight from Carol. One in ten "visible" tiles is behind solid cover.
+- Performance is not a risk. The per-action refresh is cheap, so adding line-of-sight to the fog is affordable:
+
+  | Call | Time |
+  | --- | --- |
+  | attack_range_cells() (a raycast per tile, 144 tiles) | 0.20 ms |
+  | full _refresh_player_view() | 0.35 ms |
+  | update_fog() | 0.10 ms |
+
+- Boot and stability: the headless boot is clean. 152 of 152 checks pass, including the 4-boss gauntlet, Penny's rescue, save/load and the permadeath wipe. Across all 40 probe rooms there were no SCRIPT ERRORs and no stuck enemy phases.
+
+Revised priority order:
+1. Unreachable cyan tiles (player-facing, silent)
+2. Permadeath loopholes (they undermine the EXTREME difficulty)
+3. Shooting through vending machines
+4. Fog ignoring line of sight
+5. Atomic saves and validating loaded saves
+6. Typing and tidying the scene
+
+Pass 1 overweighted the architecture notes. Measured at runtime, the codebase is stable and fast, and the real risks are rules that are mathematically inconsistent, not crashes.
+
+======================================================================
+2. LEAD TACTICAL GAME DESIGNER
+======================================================================
+
+--- PASS 1: RULES AND DATA READ ---
+
+WHAT WORKS WELL
+- The 4 AP economy is easy to read: moving costs 1 AP per tile and every attack costs 2 AP (Roster.WEAPONS). Each turn reduces to "move 2 and attack, attack twice, or move 4", which keeps the 1990s arcade pace. Nothing costs 3 AP, so AP never strands awkwardly.
+- Melee is NOT the weaker choice, because melee ignores cover (TacticalBattlefield.attack_cover). Melee enemies also walk into Carol's reach.
+  - The Squeaky Foam Mallet (36 dmg) has the best expected damage in the game.
+  - The Neon Star-Sword stays relevant against targets in cover.
+- Enemy roles differ in ways that matter in play:
+  - fast units (tiles_per_ap 2): mower, bat, flame imp, top-hat bug
+  - armoured tanks (damage_reduction 0.1-0.3)
+  - ranged units with distinct projectiles
+  - each monster attacks at most once per turn, so a 4-unit squad stays survivable
+- The node map is structured well: 15-20 nodes, the boss in the last 25% by node number, every path reaches the boss (tested), and there are three non-combat node types for pacing.
+- The Super Soaker 9000 is guaranteed when the Fire realm starts (GameState.start_realm, line 101). It can also turn up earlier in caches, since it's in Roster.DROP_WEAPONS, which matches "before/during Fire".
+
+CRITICAL ISSUES AND RISKS
+1. Hit chance ignores distance.
+   - CombatMath.hit_chance only looks at cover, so the Nailgun hits 85% at 7 tiles, the same as point blank.
+   - With no distance penalty, there's no reason to close in with a ranged weapon.
+   - Hanging back is always right, which works against the arcade energy.
+2. The Contractor Nailgun is a trap pick.
+   - Expected damage per AP (from the probe):
+
+     | Weapon | In the open | Half cover | Full cover |
+     | --- | --- | --- | --- |
+     | Nailgun | 6.8 | 4.8 | 2.8 |
+     | Sword | 10.6 | 10.6 (ignores cover) | 10.6 |
+     | Soaker | 14.5 | 10.2 | 6.0 |
+     | Mallet | 15.3 | 15.3 (ignores cover) | 15.3 |
+
+   - Once the Soaker drops, the Nailgun's only advantage is 2 extra tiles of range.
+3. Enemies never use cover.
+   - _enemy_step paths straight at carol.cell (TacticalBattlefield.gd:540).
+   - Ranged enemies walk forward until they're in range with line of sight. They never look for tiles that give them cover, never flank to strip Carol's cover, and never retreat.
+   - The cover system is one-sided: only the player uses it, and only when they choose to.
+4. Fog on EXTREME breaks ranged play.
+   - EXTREME sight is 3 tiles (GameState.gd:12), but enemy attack ranges are 4-6 tiles.
+   - Enemies shoot from tiles Carol can't see, and are only revealed after firing.
+   - The Nailgun's 7-tile range is useless unless a target has just revealed itself.
+5. Bosses scale harder than Carol does.
+   - Boss HP and damage scale with difficulty, while Carol's damage only grows +20% per realm (GameState.carol_damage_mult) and her HP stays at 100.
+   - On EXTREME the Sea Lord deals 64 per hit, so 2 hits kill Carol.
+6. The map often looks like it loops back.
+   - The boss is any node in the final 25% by node number, not necessarily in the final layer.
+   - When it isn't, nodes in later layers link backwards to it (OverworldGenerator.gd:53-61). On the map that looks like the path loops back.
+
+SPECIFIC RECOMMENDATIONS
+- Add a gentle distance falloff on top of cover, for example -2% per tile beyond 4, so close-range aggression is rewarded and long Nailgun shots are a real trade-off.
+- Rework the Nailgun: either 1 AP per shot (twice the actions, keeping the current damage) or a 20% hit bonus that ignores half cover. Either gives it a role instead of being the Soaker's weaker twin.
+- Add one enemy AI rule: when a ranged enemy can attack from several tiles, prefer the one where cover_between(carol, tile) is highest. It's about 15 lines and makes the cover system work in both directions.
+- On EXTREME, raise sight to 4 and cap enemy ranged attacks at sight+1, or reveal an enemy for one turn when it attacks out of fog, so a hit from the dark always gives the player a target.
+- Scale Carol with difficulty too: +10 max HP per realm cleared, or more Energy Drinks on Hard and EXTREME, instead of only enemy multipliers.
+- Always put the boss in the final layer, and use "final 25%" to choose which lane it's in.
+
+--- PASS 2: NUMBERS FROM THE PROBE (40 rooms, 200 maps, all difficulty and realm combinations) ---
+
+Cover in practice:
+- Of 5,431 possible ranged shots within 7 tiles, 81.3% were in the open, 7.9% against half cover, 1.8% against full cover, and 9.0% had no line of sight.
+- The average hit chance, when a shot was possible, was 81.8%.
+- Verdict: cover hardly ever triggers. It doesn't slow the game or cause frustrating misses. It's barely in play at all.
+- Cover objects are spread at random rather than placed next to likely firing positions, and the enemy AI doesn't seek them (Pass 1, issue 3).
+- I'm upgrading the recommendation: as well as cover-seeking AI, _place_terrain (TacticalBattlefield.gd:161) should cluster cover into deliberate "fighting positions". Right now 12-17 props are scattered at random (line 165), with 40% of them vending machines (line 173).
+
+Boss fights, as hits to kill Carol and shots for Carol to kill the boss. The shot counts are Carol's best ranged weapon at 85% (open) and 35% (target in full cover):
+
+| Fight | Hits to kill Carol | Carol's shots (open) | Carol's shots (full cover) |
+| --- | --- | --- | --- |
+| Medium, realm 1 (Golem, 160 HP, 24 dmg) | 5 | 11.8 (Nailgun) | 28.6 |
+| Medium, realm 4 (Sea Lord, 300 HP, 40 dmg) | 3 | 6.5 (Soaker) | 15.8 |
+| Hard, realm 4 (390 HP, 52 dmg) | 2 | 8.4 | 20.5 |
+| EXTREME, realm 4 (480 HP, 64 dmg) | 2 | 10.4 | 25.2 |
+
+- On EXTREME, Carol needs at least 5 turns of double shots against a boss that kills her in 2 hits. Survival depends entirely on her own cover, which the probe shows is rarely available.
+- EXTREME's realm 4 is very probably unwinnable without luck. Hard is tight but fair.
+- Easy and Medium are comfortable.
+
+The realm 1 boss is a slog:
+- With only the Nailgun, the Golem takes 11.8 shots (6 turns) on Medium and 18.8 on EXTREME. That's slower than the realm 4 boss with the Soaker (6.5).
+- The difficulty curve is inverted: the first boss feels slower than the last.
+- This confirms the Nailgun issue and strengthens the case for making sure the Mallet or Soaker is available before the Golem.
+
+Ranged enemies firing from beyond sight:
+- Easy, Medium and Hard: 0 of 2-3 ranged enemies per realm can outrange Carol's sight.
+- EXTREME: 2 of 2, 3 of 3, 2 of 2 and 1 of 2 across the four realms.
+- Pass 1 issue 4 is confirmed. On EXTREME almost every ranged enemy can shoot from fog.
+
+Melee enemies, as sword hits to kill an average one:
+- 1.1-1.4 hits on Easy and Medium, 1.8-2.3 on Hard, 2.2-2.8 on EXTREME.
+- On Hard and EXTREME a melee squad needs two sword swings each, so Carol must stand still to double-swing. 4 AP feels tight there, but it isn't starved.
+
+Overworld pacing, across 200 maps:
+- An average map has 17.5 nodes in 7.3 layers.
+- A path to the boss passes through 6.7-8.2 nodes, and about 57% of non-boss nodes are combat (2,010 combat, 623 hazard, 671 supply). That's roughly 4-5 fights plus the boss per realm, which is good roguelite pacing.
+- In 111 of 200 maps (55%) the boss is not in the last layer, so the "loops back" problem from Pass 1 is the norm, not an edge case. I'm raising it to high priority, because it makes the map hard to read.
+
+Resource attrition: Carol recovers 15 HP after each won fight and fully heals each realm, and drinks come from 35% of hazards, 30% of non-boss kills, and any cache that doesn't give a weapon. On Easy and Medium that's plenty. On Hard and EXTREME, the boss maths above shows the problem is burst damage, not attrition, so more drinks alone won't fix it.
+
+Revised priority order:
+1. Enemies seeking cover, plus deliberate placement of cover (cover is barely in play right now)
+2. Always put the boss in the final layer
+3. Fix EXTREME: sight vs range, and boss burst damage
+4. Rework the Nailgun and fix the slow first boss
+5. Add a distance falloff to hit chance
+
+======================================================================
+CROSS-DEPARTMENT TOP 8 (in priority order)
+======================================================================
+1. Unify reachable() with weighted A*, so every cyan tile is actually reachable. (Tech, bug)
+2. Close the permadeath loopholes: wipe every slot of the run and save after each node on EXTREME. (Tech, integrity)
+3. Teach the AI to seek cover, and cluster cover into fighting positions. (Design; cover appears in about 10% of shots today)
+4. Fix shooting through adjacent vending machines, and add line of sight to fog and enemy detection. (Tech and Design)
+5. Always put the boss in the final layer of the map. (Design, 55% of maps affected)
+6. Rebalance EXTREME: sight 3 vs enemy range 4-6, and the Sea Lord killing Carol in 2 hits. (Design)
+7. Give the Nailgun a role, and get Carol a stronger weapon before the Golem. (Design)
+8. Atomic save writes, validating loaded saves, save version 3, and typing TacticalHUD.battle. (Tech, robustness)
+
+Nothing in this audit was changed in the game. The findings are documented only, and none of this has been fixed yet.
+
+- Audit by Claude (Claude Code)

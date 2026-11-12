@@ -1,7 +1,8 @@
 extends CanvasLayer
-## Battle HUD: HP/AP, phase banner, combat log, weapons, energy drinks, hit-chance badge, results.
+## Battle HUD: HP/AP, phase banner, combat log, weapons, Dash / Shove abilities, energy
+## drinks, hit-chance badge, results.
 
-var battle: Node2D
+var battle: TacticalBattlefield
 var root: Control
 var _hp_bar: ProgressBar
 var _ap_label: Label
@@ -10,6 +11,8 @@ var _enemy_label: Label
 var _log: VBoxContainer
 var _weapon_row: HBoxContainer
 var _drink_btn: Button
+var _dash_btn: Button
+var _shove_btn: Button
 var _end_btn: Button
 var _hit_panel: PanelContainer
 var _hit_label: Label
@@ -35,7 +38,7 @@ func _ready() -> void:
 	SignalBus.hit_preview.connect(_on_hit_preview)
 
 
-func bind(b: Node2D) -> void:
+func bind(b: TacticalBattlefield) -> void:
 	battle = b
 	_rebuild_weapons()
 	update_all()
@@ -61,7 +64,7 @@ func _build_top() -> void:
 	_hp_bar = ProgressBar.new()
 	_hp_bar.position = Vector2(72, 26)
 	_hp_bar.size = Vector2(240, 24)
-	_hp_bar.max_value = GameState.CAROL_MAX_HP
+	_hp_bar.max_value = GameState.carol_max_hp()
 	_hp_bar.show_percentage = false
 	root.add_child(_hp_bar)
 	_ap_label = UiKit.label("", 22, UiKit.YELLOW)
@@ -90,24 +93,47 @@ func _build_bottom() -> void:
 	_weapon_row.position = Vector2(10, 638)
 	_weapon_row.add_theme_constant_override("separation", 6)
 	root.add_child(_weapon_row)
+	_dash_btn = _ability_button("DashButton", "DASH [Q]\n1 AP  move 2", Vector2(632, 638), func(): _on_mode("dash"))
+	_shove_btn = _ability_button("ShoveButton", "SHOVE [F]\n2 AP  push", Vector2(746, 638), func(): _on_mode("shove"))
 	_drink_btn = Button.new()
 	_drink_btn.name = "DrinkButton"
-	_drink_btn.position = Vector2(770, 638)
-	_drink_btn.custom_minimum_size = Vector2(170, 52)
+	_drink_btn.position = Vector2(860, 638)
+	_drink_btn.custom_minimum_size = Vector2(136, 52)
 	_drink_btn.icon = UiKit.sprite("item_energy_drink")
 	_drink_btn.expand_icon = true
-	_drink_btn.add_theme_constant_override("icon_max_width", 32)
+	_drink_btn.add_theme_constant_override("icon_max_width", 26)
+	_drink_btn.add_theme_font_size_override("font_size", 14)
 	_drink_btn.pressed.connect(_on_drink)
 	root.add_child(_drink_btn)
-	_end_btn = UiKit.button("END TURN [E]", 0)
+	_end_btn = UiKit.button("END TURN\n[E]", 0)
 	_end_btn.name = "EndTurnButton"
-	_end_btn.position = Vector2(950, 638)
-	_end_btn.custom_minimum_size = Vector2(170, 52)
+	_end_btn.position = Vector2(1002, 638)
+	_end_btn.custom_minimum_size = Vector2(118, 52)
+	_end_btn.add_theme_font_size_override("font_size", 15)
 	_end_btn.pressed.connect(_on_end_turn)
 	root.add_child(_end_btn)
-	var help := UiKit.label("Tile: move 1 AP\nEnemy: attack 2 AP\n1-4 weapon  H drink\nF11 fullscreen", 11, Color("#bfaee6"))
+	var help := UiKit.label("Tile: move 1 AP\nEnemy: attack\nRight-click: cancel\nEsc: pause", 12, Color("#bfaee6"))
 	help.position = Vector2(1130, 632)
 	root.add_child(help)
+
+
+func _ability_button(node_name: String, text: String, pos: Vector2, cb: Callable) -> Button:
+	var b := Button.new()
+	b.name = node_name
+	b.text = text
+	b.toggle_mode = true
+	b.position = pos
+	b.custom_minimum_size = Vector2(108, 52)
+	b.add_theme_font_size_override("font_size", 14)
+	b.pressed.connect(cb)
+	root.add_child(b)
+	return b
+
+
+func _on_mode(m: String) -> void:
+	if battle:
+		battle.set_mode("" if battle.mode == m else m)
+		update_all()
 
 
 func _build_hit_panel() -> void:
@@ -161,12 +187,13 @@ func _rebuild_weapons() -> void:
 		var b := Button.new()
 		b.name = "Weapon%d" % (i + 1)
 		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(186, 52)
+		b.custom_minimum_size = Vector2(150, 52)
 		b.icon = w.icon
 		b.expand_icon = true
-		b.add_theme_constant_override("icon_max_width", 32)
-		b.add_theme_font_size_override("font_size", 13)
-		b.text = "%d %s\n%d dmg  %d AP  rng %d" % [i + 1, w.display_name, int(w.damage * GameState.carol_damage_mult()), w.ap_cost, w.max_range_tiles]
+		b.add_theme_constant_override("icon_max_width", 26)
+		b.add_theme_font_size_override("font_size", 12)
+		b.text = "%d %s\n%d dmg %d AP rng %d" % [i + 1, w.display_name.replace("Contractor ", "").replace("Squeaky Foam ", "Foam "), int(w.damage * GameState.carol_damage_mult()), w.ap_cost, w.max_range_tiles]
+		b.tooltip_text = "%s - %s" % [w.display_name, w.description]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.pressed.connect(_on_weapon.bind(i))
 		_weapon_row.add_child(b)
@@ -191,6 +218,7 @@ func update_all() -> void:
 	if battle == null or battle.carol == null:
 		return
 	var c: BattleUnit = battle.carol
+	_hp_bar.max_value = c.max_hp
 	_hp_bar.value = c.hp
 	UiKit.set_bar_color(_hp_bar, UiKit.GREEN if c.hp > 40 else UiKit.RED)
 	_hp_bar.tooltip_text = "%d / %d HP" % [int(c.hp), int(c.max_hp)]
@@ -215,6 +243,10 @@ func update_all() -> void:
 	_drink_btn.text = "Drink x%d\n+%d HP, %d AP" % [GameState.energy_drinks, int(GameState.DRINK_HEAL), GameState.DRINK_AP]
 	_drink_btn.disabled = not player_turn or GameState.energy_drinks <= 0
 	_end_btn.disabled = not player_turn
+	_dash_btn.disabled = not player_turn or battle.dash_used or c.ap < GameState.DASH_AP
+	_shove_btn.disabled = not player_turn or c.ap < GameState.SHOVE_AP
+	_dash_btn.set_pressed_no_signal(battle.mode == "dash")
+	_shove_btn.set_pressed_no_signal(battle.mode == "shove")
 
 
 func _on_phase(text: String) -> void:

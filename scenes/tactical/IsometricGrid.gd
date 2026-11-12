@@ -214,43 +214,113 @@ func find_path(from: Vector2i, to: Vector2i, occupied: Array[Vector2i]) -> Array
 	return path
 
 
-## Cells reachable within `max_steps` moves -> step count.
+## Cells reachable within `max_steps` moves -> step count. Uses the same costs as the path
+## a unit actually walks (see move_path), so every highlighted cell can really be reached.
 func reachable(from: Vector2i, max_steps: int, occupied: Array[Vector2i]) -> Dictionary:
 	var out := {}
-	var dist := {from: 0}
-	var queue: Array[Vector2i] = [from]
-	while not queue.is_empty():
-		var c: Vector2i = queue.pop_front()
-		var d: int = dist[c]
-		if d >= max_steps:
+	var plan := plan_moves(from, max_steps, occupied)
+	for c in plan["steps"]:
+		if c != from:
+			out[c] = plan["steps"][c]
+	return out
+
+
+## Dijkstra over walkable cells with cost = steps first, spike tiles second, so the chosen
+## route is always the shortest one and avoids spikes only when that costs no extra AP.
+## Returns {"steps": {cell: steps}, "parent": {cell: cell}}.
+func plan_moves(from: Vector2i, max_steps: int, occupied: Array[Vector2i]) -> Dictionary:
+	var cost := {from: 0}
+	var steps := {from: 0}
+	var parent := {}
+	var open: Array[Vector2i] = [from]
+	while not open.is_empty():
+		var best_i := 0
+		for i in range(1, open.size()):
+			if cost[open[i]] < cost[open[best_i]]:
+				best_i = i
+		var c: Vector2i = open[best_i]
+		open.remove_at(best_i)
+		if steps[c] >= max_steps:
 			continue
 		for n in neighbors(c):
-			if dist.has(n) or not is_walkable(n) or occupied.has(n):
+			if not is_walkable(n) or occupied.has(n):
 				continue
-			dist[n] = d + 1
-			out[n] = d + 1
-			queue.append(n)
+			var nc: int = cost[c] + 1000 + (1 if hazards.has(n) else 0)
+			if not cost.has(n) or nc < cost[n]:
+				if not cost.has(n):
+					open.append(n)
+				cost[n] = nc
+				steps[n] = steps[c] + 1
+				parent[n] = c
+	return {"steps": steps, "parent": parent}
+
+
+## Path (inclusive of both ends) from a plan_moves() result, or [] if `to` isn't in it.
+func path_from_plan(plan: Dictionary, from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not plan["steps"].has(to):
+		return out
+	var c := to
+	out.append(c)
+	while c != from:
+		c = plan["parent"][c]
+		out.push_front(c)
 	return out
+
+
+## The route a unit walks to `to` within `max_steps`, matching reachable().
+func move_path(from: Vector2i, to: Vector2i, max_steps: int, occupied: Array[Vector2i]) -> Array[Vector2i]:
+	return path_from_plan(plan_moves(from, max_steps, occupied), from, to)
 
 
 # ------------------------------------------------------------------ line of sight
 
-## Casts a RayCast2D from tile center to tile center; full-cover blockers are StaticBody2D
-## diamonds. Cover hugging either end of the shot does not block it (it gives cover instead).
-func has_los(a: Vector2i, b: Vector2i) -> bool:
-	if a == b:
-		return true
+## True if a ray from tile a to tile b clears every full-cover body, ignoring cover that hugs
+## the target (that cover reduces the hit chance instead of blocking the shot).
+func _ray_clear(a: Vector2i, b: Vector2i) -> bool:
 	los_ray.clear_exceptions()
-	for end in [a, b]:
-		for n in neighbors(end):
-			if los_bodies.has(n):
-				los_ray.add_exception(los_bodies[n])
+	if los_bodies.has(b):
+		los_ray.add_exception(los_bodies[b])
+	for n in neighbors(b):
+		if los_bodies.has(n):
+			los_ray.add_exception(los_bodies[n])
 	los_ray.position = cell_to_world(a)
 	los_ray.target_position = cell_to_world(b) - los_ray.position
 	los_ray.force_raycast_update()
 	var blocked := los_ray.is_colliding()
+	var hit_body: Object = los_ray.get_collider() if blocked else null
 	los_ray.clear_exceptions()
+	_last_hit_body = hit_body
 	return not blocked
+
+
+var _last_hit_body: Object = null
+
+
+## XCOM-style line of sight with step-out. A shot that's blocked by full cover right next to
+## the shooter can still be taken by "leaning out" from an open neighbouring tile, but a
+## machine squarely in the way of a shooter with no open side blocks it.
+func has_los(a: Vector2i, b: Vector2i) -> bool:
+	if a == b:
+		return true
+	if _ray_clear(a, b):
+		return true
+	var hit_cell := Vector2i(-999, -999)
+	for c in los_bodies:
+		if los_bodies[c] == _last_hit_body:
+			hit_cell = c
+			break
+	if CombatMath.manhattan(hit_cell, a) != 1:
+		return false
+	var blocker_dir := hit_cell - a
+	for n in neighbors(a):
+		var side := n - a
+		# Step out sideways only (not forward into the machine or backwards).
+		if side == blocker_dir or side == -blocker_dir or blockers.has(n) or n == b:
+			continue
+		if _ray_clear(n, b):
+			return true
+	return false
 
 
 ## Best cover the target cell gets against a shot from `attacker` (XCOM rule: a cover object
@@ -270,10 +340,12 @@ func cover_between(attacker: Vector2i, target: Vector2i) -> int:
 
 # ------------------------------------------------------------------ fog of war
 
+## Reveals tiles within `radius` that Carol has line of sight to (vending machines block
+## vision just like they block shots).
 func update_fog(center: Vector2i, radius: int) -> void:
 	visible_cells.clear()
 	for c in all_cells():
-		if Vector2(c).distance_to(Vector2(center)) <= radius + 0.01:
+		if Vector2(c).distance_to(Vector2(center)) <= radius + 0.01 and (c == center or has_los(center, c)):
 			visible_cells[c] = true
 			explored[c] = true
 	for c in all_cells():

@@ -18,6 +18,8 @@ var bar_width: float = 84.0
 var bar_color: Color = Color("#7dff4a")
 ## 1 for regular units, 2 for 2x2 bosses.
 var size_cells: int = 1
+## Sprite scale chosen by SpriteScaler; animations squash and stretch relative to it.
+var base_scale: Vector2 = Vector2.ONE
 
 @onready var sprite: Sprite2D = $Sprite2D
 
@@ -48,6 +50,7 @@ func set_texture(tex: Texture2D) -> void:
 	sprite.texture = tex if tex != null else SpriteScaler.placeholder("unit")
 	var footprint_px := SpriteScaler.BOSS if size_cells > 1 else SpriteScaler.UNIT
 	var drawn := SpriteScaler.fit(sprite, footprint_px, SpriteScaler.FOOT_SINK * size_cells)
+	base_scale = sprite.scale
 	bar_y = -drawn.y + SpriteScaler.FOOT_SINK * size_cells - 14.0
 	bar_width = 84.0 * size_cells
 	queue_redraw()
@@ -83,6 +86,11 @@ func take_damage(amount: float) -> float:
 		sprite.modulate = Color(4, 4, 4)
 		var tw := create_tween()
 		tw.tween_property(sprite, "modulate", Color.WHITE, 0.25)
+		# Squash on impact, then spring back.
+		var sq := create_tween()
+		sq.tween_property(sprite, "scale", base_scale * Vector2(1.25, 0.78), 0.05)
+		sq.tween_property(sprite, "scale", base_scale * Vector2(0.92, 1.08), 0.07)
+		sq.tween_property(sprite, "scale", base_scale, 0.08)
 	queue_redraw()
 	if hp <= 0.0:
 		died.emit(self)

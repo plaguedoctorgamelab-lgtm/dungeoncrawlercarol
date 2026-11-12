@@ -14,13 +14,17 @@ static func generate(seed_value: int, realm: int) -> Dictionary:
 	rng.seed = seed_value
 	var total := rng.randi_range(MIN_NODES, MAX_NODES)
 
-	# 1) Split nodes into layers.
+	# 1) Split nodes into layers. The boss gets the final layer to itself, so it always sits
+	# at the end of the map and every path visibly converges on it.
 	var layer_sizes: Array[int] = []
-	var remaining := total
+	var remaining := total - 1
 	while remaining > 0:
 		var s := mini(rng.randi_range(2, 3), remaining)
+		if remaining - s == 1:
+			s += 1
 		layer_sizes.append(s)
 		remaining -= s
+	layer_sizes.append(1)
 
 	# 2) Create nodes, numbered in layer order.
 	var nodes: Array = []
@@ -50,9 +54,8 @@ static func generate(seed_value: int, realm: int) -> Dictionary:
 			if not _has_incoming(nodes, b):
 				_link(nodes, _nearest(nodes, cur, nodes[b]["lane"]), b)
 
-	# 4) Boss placement: random node within the final 25% of node numbers.
-	var first_boss_candidate := int(ceil(total * 0.75))
-	var boss_id := rng.randi_range(first_boss_candidate, total - 1)
+	# 4) Boss placement: the single node of the last layer (always within the final 25%).
+	var boss_id := total - 1
 	nodes[boss_id]["type"] = "boss"
 	nodes[boss_id]["edges"] = []
 	# Any dead end that isn't the boss gets a path to the boss.
@@ -78,6 +81,12 @@ static func generate(seed_value: int, realm: int) -> Dictionary:
 			if n["layer"] == 1 and n["id"] != boss_id:
 				n["type"] = "supply"
 				break
+	# Realm 1: every node in the second column is a supply cache, so whichever path the
+	# player takes they get the guaranteed Squeaky Foam Mallet before the HOA Golem.
+	if realm == 0:
+		for n in nodes:
+			if n["layer"] == 1 and n["id"] != boss_id:
+				n["type"] = "supply"
 
 	return {"nodes": nodes, "boss_id": boss_id, "layer_count": layers.size(), "realm": realm}
 

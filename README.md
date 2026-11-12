@@ -1,4 +1,4 @@
-# Dungeon Crawler Carol: Lair of The Sea Lord (V2 HD)
+# Dungeon Crawler Carol: Lair of The Sea Lord — v0.3.0
 
 A 1990s-cartoon 2.5D isometric turn-based tactical RPG made in **Godot 4.7** (GDScript).
 Carol fights through four elemental realms of corporate monsters to rescue her girlfriend,
@@ -6,6 +6,19 @@ Princess Penny, from the Sea Lord's underwater boardroom.
 
 V2 is the **HD tactical overhaul**: 1920x1080 fullscreen, high-res sprites, a 128x64 isometric
 grid and XCOM-style cover.
+
+**v0.3.0 "Telegraphs & Tunes"** adds:
+- smarter cover-using enemies with telegraphed intents
+- boss charge attacks with red danger zones
+- Carol's Dash and Shove
+- a rapid-fire Nailgun
+- procedural Carol animations
+- original chiptune music and sound
+- a pause menu with volume settings
+- safer saves
+- a re-tuned difficulty curve
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ![Title](docs/screenshots/01_title.png)
 
@@ -17,8 +30,9 @@ grid and XCOM-style cover.
 
 ## Play it
 
-* **Windows:** download `releases/DungeonCrawlerCarol_V2_Windows.zip`, unzip, run `DungeonCrawlerCarol_V2.exe`.
-  It starts fullscreen; press **F11** to switch between fullscreen and a window.
+* **Windows:** download the zip from this repository's **Releases** page (tag `v0.3.0`), unzip it and run
+  `DungeonCrawlerCarol_V2.exe`. It starts fullscreen; press **F11** to switch between fullscreen and a window.
+  Build zips are no longer committed to the repo (the old `releases/` zip is still in the git history for v0.2).
 * **From source:** open this folder in Godot 4.7 and press F5.
 
 ### Controls
@@ -28,11 +42,22 @@ grid and XCOM-style cover.
 | Left-click a cyan tile | Move (1 AP per tile) |
 | Left-click an enemy | Attack with the equipped weapon (2 AP) |
 | `1`-`4` or weapon buttons | Switch weapon (free) |
+| `Q` or Dash button | DASH: 1 AP, move up to 2 tiles, next attack on Carol -25% (once a turn) |
+| `F` or Shove button | SHOVE: 2 AP, push an adjacent monster onto spikes or out of cover |
 | `H` or Drink button | RADICAL Energy Drink: +35 HP for 2 AP |
 | `E` / Space / Enter or End Turn | End your turn |
+| Right-click | Cancel Dash / Shove |
+| `Esc` | Pause menu: volume, screen shake, fullscreen, quit to title |
 | `F11` | Toggle fullscreen / windowed |
 
-Hover an enemy to see the neon hit badge (`85% HIT`, `60% HIT`, `35% HIT`), its cover, HP and flavor text.
+Hover an enemy to see the neon hit badge (`85% HIT`, `60% HIT`, `35% HIT`), its cover, HP, what it plans to do next
+turn, and its flavor text. Hover a move tile to see how many monsters could hit you there.
+
+Every monster shows its **intent** next to its HP bar:
+- red **!** means it will hit Carol where she stands
+- cyan **>** means it's moving
+- grey **?** means it hasn't noticed her
+- yellow **CHARGING!** means a boss strike is coming: get out of the red danger zone
 
 ## What's in the game
 
@@ -47,7 +72,9 @@ Hover an enemy to see the neon hit badge (`85% HIT`, `60% HIT`, `35% HIT`), its 
 * **Tactical battles:** 10x10 to 12x12 rooms (bosses 12x12) on a 128x64 isometric `TileMapLayer`, under a fixed
   Camera2D. `AStarGrid2D` pathfinding, reachable tiles in neon cyan, weapon range in neon pink, y-sorted units,
   props and projectiles. Turns go Player Phase, then Enemy AI Phase.
-* **4 AP turns:** move 1 AP per tile, attack 2 AP, Energy Drink 2 AP.
+* **4 AP turns:** move 1 AP per tile, attack 2 AP (Nailgun 1 AP), Dash 1 AP, Shove 2 AP, Energy Drink 2 AP.
+* **Enemy AI** (`EnemyAI.gd`): ranged monsters pick covered, flanking firing spots, and melee monsters close in.
+  Bosses charge for a turn, lock onto a red danger zone, then strike for ×1.3. Bosses move as a 2×2 block.
 * **Cover:** 85% to hit in the open, 60% behind half cover (crates), 35% behind full cover (vending machines).
   Cover counts when it's on a tile next to the target, facing the shooter, so flanking works. A vending machine in
   the middle of the line blocks the shot (`RayCast2D`). Melee ignores cover. Enemies use the same rules on Carol.
@@ -63,23 +90,29 @@ Hover an enemy to see the neon hit badge (`85% HIT`, `60% HIT`, `35% HIT`), its 
   auto-save at the start of every room, Hard only at level start, and EXTREME is permadeath (the run save is
   deleted and you restart at Level 1).
 * **Rescue ending:** beating the Sea Lord breaks Penny's cage and plays the victory screen.
-* **Saves** are JSON in `user://savegame.json` (slot 1) and `savegame_2/3.json`.
+* **Saves** are JSON in `user://savegame.json` (slot 1) and `savegame_2/3.json`. They're written atomically
+  (`.tmp`, then swapped, with a `.bak` fallback) and validated on load. On EXTREME, quitting mid-fight counts as a death.
+* **Audio:** 23 effects and 8 music tracks, all synthesized by `tools/synth_audio.py` (run it to regenerate).
+* **Animation:** Carol has a procedural animation set (idle, walk hop, dash, attack, shove, hurt, dodge, drink, death,
+  victory) built from her single sprite in `CarolUnit.gd`.
 
 ## Project layout
 
 ```
 assets/sprites/        HD sprites (+ generated 128x64 iso floor tiles)
+assets/audio/          synthesized sound effects and music (WAV)
 scenes/overworld/      NodeMap, NodeButton, OverworldGenerator
-scenes/tactical/       TacticalBattlefield, IsometricGrid, GridOverlay, Projectile, CombatMath
+scenes/tactical/       TacticalBattlefield, EnemyAI, IsometricGrid, GridOverlay, Projectile, CombatMath
 scenes/units/          CarolUnit, EnemyUnit, PrincessPenny (BattleUnit base)
 scenes/items/          TacticalDrop
 scenes/ui/             TitleScreen, HowToPlay, TacticalHUD, SaveMenu, VictoryScreen
-scripts/autoload/      GameState (F11, difficulty, auto-save), SignalBus, SaveManager
+scripts/autoload/      GameState (F11, difficulty, auto-save, version), SignalBus, SaveManager, AudioManager, PauseMenu
 scripts/resources/     WeaponData, EnemyData, ProjectileData (custom Resources)
 scripts/util/          SpriteScaler (footprint scaling + placeholder textures)
 scripts/data/          Roster.gd - the stat tables everything is generated from
 scripts/tests/         run_unit_tests.gd (headless)
-scripts/tools/         HD asset pipeline, .tres generator, screenshot tool
+scripts/tools/         HD asset pipeline, .tres generator, screenshot tool, autoplay_sim, audit_probe
+tools/                 synth_audio.py (pure-Python chiptune synthesizer)
 resources/             4 weapons, 24 enemies, 15 projectiles (.tres)
 docs/                  design document, art manifest, screenshots
 ```
@@ -96,7 +129,11 @@ godot --headless --export-release "Windows Desktop" builds/DungeonCrawlerCarol_V
 The test runner checks the HD display settings and sprite scaling, boots into the title screen, starts a new
 game, generates 100 node maps, plays a mock tactical turn (move, cover hit chances, attack, drink, enemy phase,
 victory), fights all 4 bosses including the Penny rescue, and checks save/load, auto-saves and the permadeath wipe.
-There are 152 checks, and the process exits with the number of failures.
+There are 190 checks (pathing, line of sight, fog, Dash/Shove, enemy AI cover choice, boss telegraphs, audio,
+pause menu, atomic saves, permadeath), and the process exits with the number of failures.
+
+Balance regression: `godot --headless --script res://scripts/tools/autoplay_sim.gd -- 30` plays 30 battles per
+scenario with a bot and prints win rate, turns and HP lost.
 
 To rebuild the HD sprites from the full-size art:
 `godot --headless --script res://scripts/tools/build_assets.gd -- <folder with master PNGs>`.
