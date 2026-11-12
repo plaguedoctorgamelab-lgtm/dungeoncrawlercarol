@@ -263,9 +263,11 @@ func _try_blocker(c: Vector2i, full: bool, reserved: Array[Vector2i], start: Vec
 	if not grid.in_bounds(c) or reserved.has(c) or grid.blockers.has(c) or CombatMath.manhattan(c, start) <= 1:
 		return false
 	var kind := "vending" if full else "crate"
-	if GameState.realm == 0 and rng.randf() < 0.5:
-		kind = "fence" if full else "trash"
-	var tex_id: String = {"crate": "cover_wooden_crate", "vending": "cover_vending_machine", "trash": "cover_trash_can", "fence": "cover_privacy_fence"}[kind]
+	# Realm-specific cover mixed in 50/50 with the crates and vending machines.
+	var realm_props: Array = [["trash", "fence"], ["rig", "rack"], [], []][GameState.realm]
+	if not realm_props.is_empty() and rng.randf() < 0.5:
+		kind = realm_props[1] if full else realm_props[0]
+	var tex_id: String = {"crate": "cover_wooden_crate", "vending": "cover_vending_machine", "trash": "cover_trash_can", "fence": "cover_privacy_fence", "rig": "cover_mining_rig", "rack": "cover_server_rack"}[kind]
 	if not ResourceLoader.exists("res://assets/sprites/%s.png" % tex_id):
 		kind = "vending" if full else "crate"
 		tex_id = "cover_vending_machine" if full else "cover_wooden_crate"

@@ -5,6 +5,32 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 - It's shown on the title screen and in the pause menu, and stamped into the Windows `.exe` properties.
 - Every release is tagged in git as `vX.Y.Z`.
 
+## v0.8.0 — 2026-11-12: "The Air Realm Takes Off"
+
+All of Art Pack 3 is imported.
+- **Air monsters are frame-animated:** Crypto Bro Bat, Bored JPEG Ape, Drop-Shipper Drone, 5 AM Grindset Gargoyle and Ad-Tech Ghost. Each has a 2-frame idle loop, an attack pose and a hurt flinch.
+- **Smug Vape Cloud** (realm 2 boss) has six frames:
+  - idle (2 frames)
+  - a puffed-up neon **wind-up** on its CHARGING turn
+  - a vapor-ring blast
+  - hurt
+  - a **defeated** sad little puff it shrinks into
+- **Carol's dash and shove poses.** Every action Carol has now plays a real frame:
+  - idle
+  - walk
+  - dash
+  - sword attack
+  - shoot
+  - shove
+  - drink
+  - hit
+  - dodge
+  - down
+  - victory
+- **Air realm cover:** crypto-mining rig stacks (half cover) and glowing server racks (full cover), mixed with the crates and vending machines.
+- Importer fix: a partial Carol delivery now takes its size from an upright pose (shove), not a crouch (dash), so new poses match her existing frames.
+- 221 tests.
+
 ## v0.7.0 — 2026-11-12: "Slime Fix"
 
 - **Rooms per level cut by 15%:** 26–34 rooms instead of 30–40, still about 1.7× the original 15–20. Cover stays spread out.

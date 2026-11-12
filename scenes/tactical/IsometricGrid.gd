@@ -7,7 +7,7 @@ enum Cover { NONE, HALF, FULL }
 
 const CELL := Vector2i(128, 64)
 ## Cover value of each blocker kind (crates and trash cans = half, vending machines = full).
-const COVER_OF := {"crate": Cover.HALF, "trash": Cover.HALF, "espresso": Cover.HALF, "vending": Cover.FULL, "fence": Cover.FULL, "cage": Cover.NONE}
+const COVER_OF := {"crate": Cover.HALF, "trash": Cover.HALF, "espresso": Cover.HALF, "vending": Cover.FULL, "fence": Cover.FULL, "rig": Cover.HALF, "rack": Cover.FULL, "cage": Cover.NONE}
 const TRAP_DECAL := preload("res://scenes/tactical/TrapDecal.gd")
 const ESPRESSO := preload("res://scenes/tactical/EspressoMachine.gd")
 ## Human-readable trap names for hover text.

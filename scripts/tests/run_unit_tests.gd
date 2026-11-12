@@ -4,7 +4,7 @@ extends SceneTree
 ## Exits with the number of failed checks (0 = all passed).
 
 ## Raise this when you add checks; fewer means a test function crashed part-way.
-const MIN_CHECKS := 216
+const MIN_CHECKS := 220
 
 var failures: int = 0
 var checks: int = 0
@@ -165,7 +165,7 @@ func _test_title() -> void:
 	check(title != null and title.name == "TitleScreen", "boots into TitleScreen")
 	check(title.find_children("Difficulty*", "Button", true, false).size() == 4, "4 difficulty selectors")
 	var ver = title.find_child("VersionLabel", true, false)
-	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.7.0", "title shows release number %s" % ("" if ver == null else ver.text))
+	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.8.0", "title shows release number %s" % ("" if ver == null else ver.text))
 	title.selected_difficulty = 1
 	title.start_new_game()
 	await process_frame
@@ -236,7 +236,7 @@ func _test_tactical() -> void:
 	var csize: Vector2 = csprite.texture.get_size() * csprite.scale
 	if battle.carol.has_frames:
 		check(absf(csprite.scale.y * battle.carol.FRAME_BODY - 128.0) < 0.5, "Carol (frame art) drawn 128px tall")
-		check(battle.carol.frames.size() == 9 and battle.carol.frames["walk"].size() == 6, "all 9 Carol frame animations load (walk = 6 frames)")
+		check(battle.carol.frames.size() == 11 and battle.carol.frames["walk"].size() == 6, "all 11 Carol frame animations load (walk = 6 frames)")
 	else:
 		check(csize.x <= 128.5 and csize.y <= 128.5 and maxf(csize.x, csize.y) >= 127.5, "Carol drawn at a 128px footprint")
 	check(battle.grid.is_cell_visible(battle.carol.cell), "fog: Carol's tile is visible")
@@ -808,3 +808,19 @@ func _test_v06() -> void:
 	check(boss.sprite.texture == boss.frames["charge"][0], "the Golem shows its wind-up frame while CHARGING")
 	boss.charged = false
 	check(battle.carol.frames.has("drink") and battle.carol.frames.has("dodge"), "Carol has drink and dodge frames")
+	print("== v0.8 art pack 3 (Air realm) ==")
+	var air = await _start_battle(1, true)
+	var vape = air.enemies[0]
+	check(vape.data.enemy_id == "vape_cloud_elemental" and vape.has_frames and vape.frames.has("charge") and vape.frames.has("defeated"), "Smug Vape Cloud has idle / charge / attack / hurt / defeated frames")
+	var air_anim := 0
+	for en in air.enemies:
+		if en.has_frames:
+			air_anim += 1
+	check(air_anim == air.enemies.size(), "every Air monster in the fight is frame-animated (%d/%d)" % [air_anim, air.enemies.size()])
+	check(air.carol.frames.has("dash") and air.carol.frames.has("shove"), "Carol has dash and shove frames")
+	var air_kinds := {}
+	for i in 3:
+		var ab = await _start_battle(1, false)
+		for c in ab.grid.blockers:
+			air_kinds[ab.grid.blockers[c]] = true
+	check(air_kinds.has("rig") or air_kinds.has("rack"), "Air rooms use mining rigs / server racks %s" % str(air_kinds.keys()))

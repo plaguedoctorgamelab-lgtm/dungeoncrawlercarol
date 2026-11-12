@@ -33,7 +33,7 @@ func _initialize() -> void:
 	src = args[0]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CAROL_OUT))
 	# Props: stored 256 px wide (2x the 128 px tile) so their base diamond spans the tile.
-	for id in ["cover_wooden_crate", "cover_vending_machine", "trap_espresso_machine", "cover_trash_can", "cover_privacy_fence"]:
+	for id in ["cover_wooden_crate", "cover_vending_machine", "trap_espresso_machine", "cover_trash_can", "cover_privacy_fence", "cover_mining_rig", "cover_server_rack"]:
 		_prop(id, id, 256)
 	# Floor traps: the diamond itself, 256 px wide.
 	_prop("trap_spikes", "hazard_spikes_iso", 256)
@@ -176,7 +176,13 @@ func _carol_frames() -> void:
 		return
 	# One scale for every frame, from a standing pose (idle_01, or the first frame of a
 	# partial delivery), so Carol never changes size.
-	var ref_name := "carol_idle_01" if names.has("carol_idle_01") else ("carol_drink_01" if names.has("carol_drink_01") else names[0])
+	# Prefer an upright, full-height pose as the size reference (crouches like dash would
+	# make her too big).
+	var ref_name: String = names[0]
+	for cand in ["carol_idle_01", "carol_drink_01", "carol_shove_01", "carol_victory_01", "carol_walk_01"]:
+		if names.has(cand):
+			ref_name = cand
+			break
 	var ref := _load(dir.path_join(ref_name + ".png"))
 	if ref == null:
 		return

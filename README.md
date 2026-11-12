@@ -1,4 +1,4 @@
-# Dungeon Crawler Carol: Lair of The Sea Lord — v0.7.0
+# Dungeon Crawler Carol: Lair of The Sea Lord — v0.8.0
 
 A 1990s-cartoon 2.5D isometric turn-based tactical RPG made in **Godot 4.7** (GDScript).
 Carol fights through four elemental realms of corporate monsters to rescue her girlfriend,
@@ -18,7 +18,14 @@ grid and XCOM-style cover.
 - safer saves
 - a re-tuned difficulty curve
 
-**v0.7.0** trims maps to 26–34 rooms per level and fixes the see-through green slime (a safer background-removal step in the art importer).
+**v0.8.0 "The Air Realm Takes Off"** adds Art Pack 3:
+- frame-animated Air monsters and the Smug Vape Cloud boss
+- Carol's dash and shove poses
+- Air realm mining-rig and server-rack cover
+
+The Earth and Air realms are now fully animated.
+
+**v0.7.0** trimmed maps to 26–34 rooms per level and fixes the see-through green slime (a safer background-removal step in the art importer).
 
 **v0.6.0 "Earth Comes Alive"** added:
 - frame-animated Earth monsters and HOA Golem boss (Art Pack 2)
@@ -48,7 +55,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Play it
 
-* **Windows:** download the zip from this repository's **Releases** page (tag `v0.7.0`), unzip it and run
+* **Windows:** download the zip from this repository's **Releases** page (tag `v0.8.0`), unzip it and run
   `DungeonCrawlerCarol_V2.exe`. It starts fullscreen; press **F11** to switch between fullscreen and a window.
   Build zips are no longer committed to the repo (the old `releases/` zip is still in the git history for v0.2).
 * **From source:** open this folder in Godot 4.7 and press F5.
@@ -150,7 +157,7 @@ godot --headless --export-release "Windows Desktop" builds/DungeonCrawlerCarol_V
 The test runner checks the HD display settings and sprite scaling, boots into the title screen, starts a new
 game, generates 100 node maps, plays a mock tactical turn (move, cover hit chances, attack, drink, enemy phase,
 victory), fights all 4 bosses including the Penny rescue, and checks save/load, auto-saves and the permadeath wipe.
-There are 217 checks (pathing, line of sight, fog, Dash/Shove, enemy AI cover choice, boss telegraphs, audio,
+There are 221 checks (pathing, line of sight, fog, Dash/Shove, enemy AI cover choice, boss telegraphs, audio,
 pause menu, atomic saves, permadeath), and the process exits with the number of failures.
 
 Balance regression: `godot --headless --script res://scripts/tools/autoplay_sim.gd -- 30` plays 30 battles per

@@ -16,7 +16,7 @@ const HOP_HEIGHT := 18.0
 const DASH_STEP_TIME := 0.08
 const SWIPE_COLORS := [Color("#ff2bd6"), Color("#00f0ff"), Color("#ffe600")]
 const FRAME_DIR := "res://assets/sprites/carol/"
-const FRAME_ANIMS := ["idle", "walk", "attack", "shoot", "hit", "down", "victory", "drink", "dodge"]
+const FRAME_ANIMS := ["idle", "walk", "attack", "shoot", "hit", "down", "victory", "drink", "dodge", "dash", "shove"]
 ## Frame canvas from import_art.gd: feet sit at FRAME_FOOT; the idle pose is FRAME_BODY tall.
 const FRAME_CANVAS := Vector2(440, 320)
 const FRAME_FOOT := Vector2(220, 300)
@@ -209,7 +209,10 @@ func dash_to(c: Vector2i, world: Vector2) -> void:
 	cell = c
 	face(world)
 	anim = "dash"
-	show_frame("walk", 4)
+	if frames.has("dash"):
+		show_frame("dash", 1)
+	else:
+		show_frame("walk", 4)
 	sprite.rotation = 0.2 * _facing * _rk
 	sprite.scale = base_scale * Vector2(1.15, 0.9)
 	var move := create_tween()
@@ -321,7 +324,10 @@ func _swipe(target_pos: Vector2) -> void:
 func play_shove(target_pos: Vector2) -> void:
 	face(target_pos)
 	anim = "shove"
-	show_frame("attack", 2)
+	if frames.has("shove"):
+		show_frame("shove", 1)
+	else:
+		show_frame("attack", 2)
 	var f := _facing
 	var crouch := _tw().set_parallel(true)
 	crouch.tween_property(sprite, "scale", base_scale * Vector2(1.1, 0.88), 0.1)
@@ -332,7 +338,8 @@ func play_shove(target_pos: Vector2) -> void:
 	push.tween_property(self, "position", home + (target_pos - home) * 0.3, 0.07)
 	push.tween_property(sprite, "scale", base_scale * Vector2(0.92, 1.1), 0.07)
 	push.tween_property(sprite, "rotation", 0.18 * f * _rk, 0.07)
-	show_frame("attack", 3)
+	if not frames.has("shove"):
+		show_frame("attack", 3)
 	await push.finished
 	var back := _tw()
 	back.tween_property(self, "position", home, 0.14)
