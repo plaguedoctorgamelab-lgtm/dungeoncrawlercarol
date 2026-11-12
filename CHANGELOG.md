@@ -5,6 +5,16 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 - It's shown on the title screen and in the pause menu, and stamped into the Windows `.exe` properties.
 - Every release is tagged in git as `vX.Y.Z`.
 
+## v0.7.0 — 2026-11-12: "Slime Fix"
+
+- **Rooms per level cut by 15%:** 26–34 rooms instead of 30–40, still about 1.7× the original 15–20. Cover stays spread out.
+- **The Landlord Slime is solid again.** The old green-screen removal treated any strongly green pixel as background, so it erased most of the green slime, which played as almost fully transparent.
+  - The importer now reads the background colour from the image corners (it supports both #00FF00 green and #FF00FF magenta).
+  - It only removes pixels that match that colour closely *and* are connected to the image border (a flood fill), plus near-exact matches in enclosed gaps.
+  - Green characters like the slime and the zombie intern now keep their colours.
+  - Art Pack 2 has been re-imported with it.
+- **Art Pack 3 spec** (Air realm) added: `docs/art_brief_pack3.md`. It asks for a magenta background for any green subject.
+
 ## v0.6.0 — 2026-11-12: "Earth Comes Alive"
 
 ### Art Pack 2

@@ -54,21 +54,77 @@ func _load(path: String) -> Image:
 	return img
 
 
-## Soft chroma key for a #00FF00 background with green despill on the edges.
+## Background removal that's safe for green (or magenta) subjects.
+## 1. The key colour is read from the four corners (#00FF00 green or #FF00FF magenta).
+## 2. Background = pixels close to that colour that are connected to the image border
+##    (flood fill), plus any near-exact key-colour pixels in enclosed gaps.
+## 3. Subject pixels touching the background get a soft edge and lose colour spill.
+## A green slime survives because its greens are far from pure #00FF00.
 static func key_green(img: Image) -> void:
-	for y in img.get_height():
-		for x in img.get_width():
+	var w := img.get_width()
+	var h := img.get_height()
+	var key := Color(0, 0, 0)
+	for c in [Vector2i(0, 0), Vector2i(w - 1, 0), Vector2i(0, h - 1), Vector2i(w - 1, h - 1)]:
+		var px := img.get_pixel(c.x, c.y)
+		key += Color(px.r, px.g, px.b) * 0.25
+	var near := 0.42 # flood-fill tolerance (colour distance to the key)
+	var exact := 0.16 # enclosed gaps must be this close to count as background
+	var bg := PackedByteArray()
+	bg.resize(w * h)
+	var stack: PackedInt32Array = []
+	for x in w:
+		stack.append(x)
+		stack.append((h - 1) * w + x)
+	for y in h:
+		stack.append(y * w)
+		stack.append(y * w + w - 1)
+	while not stack.is_empty():
+		var idx := stack[stack.size() - 1]
+		stack.resize(stack.size() - 1)
+		if bg[idx] != 0:
+			continue
+		var x := idx % w
+		var y := idx / w
+		var c := img.get_pixel(x, y)
+		if _dist(c, key) > near:
+			continue
+		bg[idx] = 1
+		if x > 0: stack.append(idx - 1)
+		if x < w - 1: stack.append(idx + 1)
+		if y > 0: stack.append(idx - w)
+		if y < h - 1: stack.append(idx + w)
+	for y in h:
+		for x in w:
+			var idx := y * w + x
 			var c := img.get_pixel(x, y)
-			var other := maxf(c.r, c.b)
-			var g := c.g - other
-			if g > 0.38 and c.g > 0.5:
+			if bg[idx] != 0 or _dist(c, key) < exact:
 				img.set_pixel(x, y, Color(0, 0, 0, 0))
-			elif g > 0.12:
-				var a := clampf(1.0 - (g - 0.12) / 0.26, 0.0, 1.0)
-				img.set_pixel(x, y, Color(c.r, other, c.b, a * c.a))
-			elif c.g > other:
-				c.g = lerpf(c.g, other, 0.5)
-				img.set_pixel(x, y, c)
+				bg[idx] = 1
+	# Soft edges + despill on subject pixels that touch the background.
+	var green_key := key.g > key.r and key.g > key.b
+	for y in h:
+		for x in w:
+			var idx := y * w + x
+			if bg[idx] != 0:
+				continue
+			var touches := (x > 0 and bg[idx - 1] != 0) or (x < w - 1 and bg[idx + 1] != 0) or (y > 0 and bg[idx - w] != 0) or (y < h - 1 and bg[idx + w] != 0)
+			if not touches:
+				continue
+			var c := img.get_pixel(x, y)
+			var d := _dist(c, key)
+			if d < near + 0.18:
+				c.a = clampf((d - near * 0.6) / 0.35, 0.25, 1.0)
+			if green_key:
+				c.g = minf(c.g, maxf(c.r, c.b) + 0.08)
+			else:
+				var m := minf(c.r, c.b)
+				c.r = minf(c.r, c.g + 0.08) if m > c.g else c.r
+				c.b = minf(c.b, c.g + 0.08) if m > c.g else c.b
+			img.set_pixel(x, y, c)
+
+
+static func _dist(a: Color, b: Color) -> float:
+	return sqrt((a.r - b.r) * (a.r - b.r) + (a.g - b.g) * (a.g - b.g) + (a.b - b.b) * (a.b - b.b))
 
 
 static func shrink_to_width(img: Image, w: int) -> void:

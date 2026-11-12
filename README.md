@@ -1,4 +1,4 @@
-# Dungeon Crawler Carol: Lair of The Sea Lord — v0.6.0
+# Dungeon Crawler Carol: Lair of The Sea Lord — v0.7.0
 
 A 1990s-cartoon 2.5D isometric turn-based tactical RPG made in **Godot 4.7** (GDScript).
 Carol fights through four elemental realms of corporate monsters to rescue her girlfriend,
@@ -18,7 +18,9 @@ grid and XCOM-style cover.
 - safer saves
 - a re-tuned difficulty curve
 
-**v0.6.0 "Earth Comes Alive"** adds:
+**v0.7.0** trims maps to 26–34 rooms per level and fixes the see-through green slime (a safer background-removal step in the art importer).
+
+**v0.6.0 "Earth Comes Alive"** added:
 - frame-animated Earth monsters and HOA Golem boss (Art Pack 2)
 - Carol's drink and dodge poses
 - Earth trash-can and fence cover
@@ -46,7 +48,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Play it
 
-* **Windows:** download the zip from this repository's **Releases** page (tag `v0.6.0`), unzip it and run
+* **Windows:** download the zip from this repository's **Releases** page (tag `v0.7.0`), unzip it and run
   `DungeonCrawlerCarol_V2.exe`. It starts fullscreen; press **F11** to switch between fullscreen and a window.
   Build zips are no longer committed to the repo (the old `releases/` zip is still in the git history for v0.2).
 * **From source:** open this folder in Godot 4.7 and press F5.
@@ -86,7 +88,7 @@ Every monster shows its **intent** next to its HP bar:
 * **Sprites:** high-res transparent PNGs built from the full-size art. `SpriteScaler.gd` scales every sprite to its
   footprint: 128x128 for Carol, Penny and regular enemies, 256x256 for 2x2-tile bosses, 128x128 / 128x192 for
   crates / vending machines, and 56x56 for projectiles and drops. Missing PNGs get procedural placeholders.
-* **Node map:** a Slay the Spire-style branching graph per realm (30-40 nodes): Combat, Hazard, Supply Cache
+* **Node map:** a Slay the Spire-style branching graph per realm (26-34 nodes): Combat, Hazard, Supply Cache
   (weapon or drink) and Boss. The boss is always in the final 25% of nodes, and every path leads to it.
 * **Tactical battles:** 10x10 to 12x12 rooms (bosses 12x12) on a 128x64 isometric `TileMapLayer`, under a fixed
   Camera2D. `AStarGrid2D` pathfinding, reachable tiles in neon cyan, weapon range in neon pink, y-sorted units,

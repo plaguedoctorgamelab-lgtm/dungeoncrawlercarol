@@ -143,7 +143,7 @@ func _test_overworld() -> void:
 			var m: Dictionary = OverworldGenerator.generate(1000 + s * 17 + realm, realm)
 			var n: int = m["nodes"].size()
 			var boss: int = m["boss_id"]
-			var ok := n >= 30 and n <= 40 and boss >= int(ceil(n * 0.75)) and boss < n
+			var ok := n >= 26 and n <= 34 and boss >= int(ceil(n * 0.75)) and boss < n
 			# The boss sits alone in the final layer.
 			var last_layer: int = int(m["layer_count"]) - 1
 			var in_last := 0
@@ -165,7 +165,7 @@ func _test_title() -> void:
 	check(title != null and title.name == "TitleScreen", "boots into TitleScreen")
 	check(title.find_children("Difficulty*", "Button", true, false).size() == 4, "4 difficulty selectors")
 	var ver = title.find_child("VersionLabel", true, false)
-	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.6.0", "title shows release number %s" % ("" if ver == null else ver.text))
+	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.7.0", "title shows release number %s" % ("" if ver == null else ver.text))
 	title.selected_difficulty = 1
 	title.start_new_game()
 	await process_frame
@@ -176,7 +176,7 @@ func _test_title() -> void:
 	await process_frame
 	await process_frame
 	check(current_scene.name == "NodeMap", "How to Play continues to the overworld")
-	check(gs.map_data["nodes"].size() >= 30, "overworld generated with %d nodes" % gs.map_data["nodes"].size())
+	check(gs.map_data["nodes"].size() >= 26, "overworld generated with %d nodes" % gs.map_data["nodes"].size())
 
 
 func _test_overworld_scene() -> void:
