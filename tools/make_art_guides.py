@@ -86,6 +86,22 @@ def character_guide(name):
     return w, h
 
 
+def boss_guide(name):
+    """2x2-tile boss frame: a 1024x512 footprint (four tiles) with the feet cross at its centre."""
+    w, h = 1024, 1280
+    c = Canvas(w, h)
+    cx, cy = w / 2, h - 256
+    c.diamond(cx, cy, 1016, 504, MAGENTA, 3)
+    # Inner lines showing the four tiles.
+    c.line(cx - 254, cy - 126, cx + 254, cy + 126, MAGENTA, 1, dash=8)
+    c.line(cx + 254, cy - 126, cx - 254, cy + 126, MAGENTA, 1, dash=8)
+    c.line(cx - 60, cy, cx + 60, cy, BLACK, 4)
+    c.line(cx, cy - 60, cx, cy + 60, BLACK, 4)
+    c.line(0, 32, w, 32, YELLOW, 3, dash=14)
+    c.save(os.path.join(OUT, name))
+    return w, h
+
+
 def floor_guide(name):
     """A single floor tile diamond (512x256) for trap / floor decal art."""
     c = Canvas(512, 256)
@@ -100,5 +116,6 @@ if __name__ == "__main__":
         ("guide_full_cover_512x768.png", box_guide("guide_full_cover_512x768.png", 512)),
         ("guide_character_512x640.png", character_guide("guide_character_512x640.png")),
         ("guide_floor_trap_512x256.png", floor_guide("guide_floor_trap_512x256.png")),
+        ("guide_boss_1024x1280.png", boss_guide("guide_boss_1024x1280.png")),
     ]:
         print("wrote", name, size)
