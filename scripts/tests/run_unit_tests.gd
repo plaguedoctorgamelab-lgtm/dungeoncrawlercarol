@@ -4,7 +4,7 @@ extends SceneTree
 ## Exits with the number of failed checks (0 = all passed).
 
 ## Raise this when you add checks; fewer means a test function crashed part-way.
-const MIN_CHECKS := 208
+const MIN_CHECKS := 209
 
 var failures: int = 0
 var checks: int = 0
@@ -163,7 +163,7 @@ func _test_title() -> void:
 	check(title != null and title.name == "TitleScreen", "boots into TitleScreen")
 	check(title.find_children("Difficulty*", "Button", true, false).size() == 4, "4 difficulty selectors")
 	var ver = title.find_child("VersionLabel", true, false)
-	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.4.0", "title shows release number %s" % ("" if ver == null else ver.text))
+	check(ver != null and ver.text == "v" + gs.version() and gs.version() == "0.5.0", "title shows release number %s" % ("" if ver == null else ver.text))
 	title.selected_difficulty = 1
 	title.start_new_game()
 	await process_frame
@@ -232,7 +232,11 @@ func _test_tactical() -> void:
 	check(right.x - left.x + 128 <= 1920 and bottom.y - top.y + 64 <= 1080 - 230, "room fits the 1920x1080 view between the HUD bars")
 	var csprite: Sprite2D = battle.carol.sprite
 	var csize: Vector2 = csprite.texture.get_size() * csprite.scale
-	check(csize.x <= 128.5 and csize.y <= 128.5 and maxf(csize.x, csize.y) >= 127.5, "Carol drawn at a 128px footprint")
+	if battle.carol.has_frames:
+		check(absf(csprite.scale.y * battle.carol.FRAME_BODY - 128.0) < 0.5, "Carol (frame art) drawn 128px tall")
+		check(battle.carol.frames.size() == 7 and battle.carol.frames["walk"].size() == 6, "all 7 Carol frame animations load (walk = 6 frames)")
+	else:
+		check(csize.x <= 128.5 and csize.y <= 128.5 and maxf(csize.x, csize.y) >= 127.5, "Carol drawn at a 128px footprint")
 	check(battle.grid.is_cell_visible(battle.carol.cell), "fog: Carol's tile is visible")
 	var far := Vector2i(battle.grid.width - 1, 0)
 	check(not battle.grid.is_cell_visible(far), "fog: far corner hidden at sight %d" % gs.sight_radius())

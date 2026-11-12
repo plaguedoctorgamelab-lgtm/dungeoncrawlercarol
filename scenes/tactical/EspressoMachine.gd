@@ -16,7 +16,7 @@ func _ready() -> void:
 	var tex := SpriteScaler.texture("trap_espresso_machine", "") if ResourceLoader.exists("res://assets/sprites/trap_espresso_machine.png") else null
 	if tex:
 		texture = tex
-		SpriteScaler.fit(self, SpriteScaler.COVER_HALF, 14.0)
+		SpriteScaler.fit_iso(self, 128.0, 32.0)
 		_has_art = true
 
 

@@ -148,7 +148,9 @@ func add_blocker(c: Vector2i, kind: String, tex: Texture2D, blocks_los: bool) ->
 		var s := Sprite2D.new()
 		s.texture = tex
 		s.position = cell_to_world(c)
-		SpriteScaler.fit(s, SpriteScaler.COVER_FULL if kind == "vending" else SpriteScaler.COVER_HALF, 14.0)
+		# Props are drawn in true 2:1 isometric (docs/art_brief.md), so their base spans the
+		# tile and their front corner sits on the tile's bottom corner.
+		SpriteScaler.fit_iso(s, 128.0, 32.0)
 		s.name = "%s_%d_%d" % [kind, c.x, c.y]
 		objects.add_child(s)
 		blocker_sprites[c] = s
@@ -186,7 +188,7 @@ func add_hazard(c: Vector2i, tex: Texture2D, kind: String = "spikes") -> void:
 		var s := Sprite2D.new()
 		s.texture = tex
 		s.position = cell_to_world(c)
-		SpriteScaler.fit(s, Vector2(112, 84), 26.0)
+		SpriteScaler.fit_decal(s, 124.0, 4.0)
 		decals.add_child(s)
 		return
 	var d: Node2D = TRAP_DECAL.new()

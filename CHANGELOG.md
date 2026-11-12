@@ -5,6 +5,30 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 - It's shown on the title screen and in the pause menu, and stamped into the Windows `.exe` properties.
 - Every release is tagged in git as `vX.Y.Z`.
 
+## v0.5.0 — 2026-11-12: "New Art"
+
+The first round of art made from `docs/art_brief.md` is now in the game.
+
+- **Carol now has frame-by-frame animation**, 20 frames in all:
+  - idle (3 frames, ping-pong)
+  - walk (6)
+  - sword attack (wind-up, swing, strike, recover)
+  - shoot (aim and recoil)
+  - hit (2)
+  - knocked down (2)
+  - victory
+- The procedural motion (hops, squash, swipe trail, afterimages) still plays on top of the frames, with smaller tilts.
+- Every frame is aligned on a shared foot point, so she doesn't jitter between poses. Her idle pose is also the new HUD portrait.
+- **New props in true 2:1 isometric:** the wooden crate, the vending machine (now facing front-left) and the Overheated Espresso Machine. Props are now scaled to the tile width with their front corner on the tile's bottom corner, so they sit square on the grid.
+- **New trap tiles:** spikes, live wire (separate art for sparking and dark, with a flicker while live) and red tape.
+- `scripts/tools/import_art.gd` imports an art delivery in one step:
+  - removes the green background, with soft edges and green-spill cleanup
+  - crops props and traps and scales them to the grid
+  - normalizes Carol's frames onto one canvas, aligned by her feet
+  - re-run it on any future delivery
+- The procedural trap and espresso drawings remain as a fallback if any file is missing.
+- 209 tests.
+
 ## v0.4.0 — 2026-11-12: "Traps & Drama"
 
 ### New traps

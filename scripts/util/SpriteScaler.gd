@@ -33,6 +33,27 @@ static func fit(sprite: Sprite2D, footprint: Vector2, sink: float = FOOT_SINK, b
 	return tex_size * s
 
 
+## For true 2:1 isometric props (art from docs/art_brief.md): scales the texture so it is
+## exactly `width` px wide (the tile is 128) and puts its lowest pixel - the front corner of
+## its base - on the tile's bottom corner, `base_y` px below the tile centre.
+static func fit_iso(sprite: Sprite2D, width: float = 128.0, base_y: float = 32.0) -> Vector2:
+	var tex_size := Vector2(sprite.texture.get_size())
+	var s := width / maxf(tex_size.x, 1.0)
+	sprite.centered = true
+	sprite.scale = Vector2(s, s)
+	sprite.offset = Vector2(0, -tex_size.y / 2.0 + base_y / s)
+	return tex_size * s
+
+
+## Flat floor decals (traps): `width` px wide, centred on the tile.
+static func fit_decal(sprite: Sprite2D, width: float = 124.0, lift: float = 0.0) -> void:
+	var tex_size := Vector2(sprite.texture.get_size())
+	var s := width / maxf(tex_size.x, 1.0)
+	sprite.centered = true
+	sprite.scale = Vector2(s, s)
+	sprite.offset = Vector2(0, -lift / s)
+
+
 ## Uniform scale that fits `tex_size` inside `footprint`.
 static func scale_for(tex_size: Vector2, footprint: Vector2) -> float:
 	if tex_size.x <= 0 or tex_size.y <= 0:

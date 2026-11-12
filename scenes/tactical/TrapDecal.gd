@@ -8,21 +8,46 @@ var kind: String = "wire"
 var active: bool = false
 var _t: float = 0.0
 var _rng := RandomNumberGenerator.new()
+## Sprite showing the delivered art (null -> procedural drawing).
+var _art: Sprite2D
+var _tex_on: Texture2D
+var _tex_off: Texture2D
 
 
 func _ready() -> void:
 	_rng.seed = hash(position)
+	var on_id := "trap_live_wire_on" if kind == "wire" else "trap_red_tape"
+	var off_id := "trap_live_wire_off" if kind == "wire" else "trap_red_tape"
+	if ResourceLoader.exists("res://assets/sprites/%s.png" % on_id):
+		_tex_on = load("res://assets/sprites/%s.png" % on_id)
+		_tex_off = load("res://assets/sprites/%s.png" % off_id) if ResourceLoader.exists("res://assets/sprites/%s.png" % off_id) else _tex_on
+		_art = Sprite2D.new()
+		add_child(_art)
+		_apply_art()
+
+
+func _apply_art() -> void:
+	if _art == null:
+		return
+	_art.texture = _tex_on if (active or kind != "wire") else _tex_off
+	SpriteScaler.fit_decal(_art, 124.0)
 
 
 func set_active(on: bool) -> void:
 	active = on
+	_apply_art()
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	if kind == "wire" and active:
 		_t += delta
+		if _art:
+			# Crackle: a quick bright flicker over the sparking art.
+			_art.modulate = Color(1.0, 1.0, 1.0) * (1.0 + 0.35 * absf(sin(_t * 23.0)))
 		queue_redraw()
+	elif _art:
+		_art.modulate = Color.WHITE
 
 
 func _diamond(s: float) -> PackedVector2Array:
@@ -39,6 +64,8 @@ func _iso(u: float, v: float, s: float = 0.8) -> Vector2:
 
 
 func _draw() -> void:
+	if _art != null:
+		return
 	if kind == "wire":
 		_draw_wire()
 	elif kind == "tape":

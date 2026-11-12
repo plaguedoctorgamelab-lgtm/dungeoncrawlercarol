@@ -1,4 +1,4 @@
-# Dungeon Crawler Carol: Lair of The Sea Lord — v0.4.0
+# Dungeon Crawler Carol: Lair of The Sea Lord — v0.5.0
 
 A 1990s-cartoon 2.5D isometric turn-based tactical RPG made in **Godot 4.7** (GDScript).
 Carol fights through four elemental realms of corporate monsters to rescue her girlfriend,
@@ -18,7 +18,10 @@ grid and XCOM-style cover.
 - safer saves
 - a re-tuned difficulty curve
 
-**v0.4.0 "Traps & Drama"** adds:
+**v0.5.0 "New Art"** adds frame-by-frame Carol animation and new grid-aligned art for the props
+and traps, imported with `scripts/tools/import_art.gd`.
+
+**v0.4.0 "Traps & Drama"** added:
 - live wires, red tape and exploding espresso machines
 - NEW THREAT! / BOSS FIGHT! intro cards
 - an enemy hover card with portrait and stats
@@ -36,7 +39,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Play it
 
-* **Windows:** download the zip from this repository's **Releases** page (tag `v0.4.0`), unzip it and run
+* **Windows:** download the zip from this repository's **Releases** page (tag `v0.5.0`), unzip it and run
   `DungeonCrawlerCarol_V2.exe`. It starts fullscreen; press **F11** to switch between fullscreen and a window.
   Build zips are no longer committed to the repo (the old `releases/` zip is still in the git history for v0.2).
 * **From source:** open this folder in Godot 4.7 and press F5.
@@ -138,7 +141,7 @@ godot --headless --export-release "Windows Desktop" builds/DungeonCrawlerCarol_V
 The test runner checks the HD display settings and sprite scaling, boots into the title screen, starts a new
 game, generates 100 node maps, plays a mock tactical turn (move, cover hit chances, attack, drink, enemy phase,
 victory), fights all 4 bosses including the Penny rescue, and checks save/load, auto-saves and the permadeath wipe.
-There are 208 checks (pathing, line of sight, fog, Dash/Shove, enemy AI cover choice, boss telegraphs, audio,
+There are 209 checks (pathing, line of sight, fog, Dash/Shove, enemy AI cover choice, boss telegraphs, audio,
 pause menu, atomic saves, permadeath), and the process exits with the number of failures.
 
 Balance regression: `godot --headless --script res://scripts/tools/autoplay_sim.gd -- 30` plays 30 battles per
